@@ -121,6 +121,80 @@ extension Workspace {
     }
 }
 
+// MARK: - Drag/drop actions
+
+@MainActor
+extension Workspace {
+
+    /// Promote an inner surface (identified by its Bonsplit tab ID) to a brand-new outer tab
+    /// on `targetWorkspace`.
+    ///
+    /// This is the drag-drop companion to `promotePane`: the caller knows the inner surface tab
+    /// ID from the drag payload, not the pane ID. Works for:
+    ///   - Same workspace: surface is detached from its inner Bonsplit, a new outer tab is
+    ///     created on `self`/`targetWorkspace`, and the surface is re-attached there.
+    ///   - Different workspace: the surface is detached from the source (self) and attached
+    ///     in a newly-created outer tab on `targetWorkspace`.
+    ///
+    /// `detachSurface` removes the panel from `self.panels` and cancels its subscription.
+    /// `targetWorkspace.attachDetachedSurface` re-registers it in the destination.
+    /// The source pane auto-closes when empty (`autoCloseEmptyPanes: true`).
+    /// Returns `true` when the promote succeeds.
+    @discardableResult
+    func dropSurfaceAsNewWorkspaceTab(surfaceTabId: Bonsplit.TabID, targetWorkspace: Workspace) -> Bool {
+        guard let panelId = panelIdFromSurfaceId(surfaceTabId) else { return false }
+
+        let tabTitle = panelCustomTitles[panelId]
+            ?? panelTitles[panelId]
+            ?? targetWorkspace.title
+
+        // Detach the surface from this workspace's inner Bonsplit.
+        // `detachSurface` removes the panel from `self.panels` (via discardClosedPanelLifecycleState)
+        // and returns a DetachedSurfaceTransfer that carries the panel reference.
+        guard let detached = detachSurface(panelId: panelId) else { return false }
+
+        // Create a new outer tab on the target workspace. `handleOuterDidCreateTab` seeds a
+        // placeholder terminal inside; we'll replace it with the promoted surface below.
+        guard let newOuterTabId = targetWorkspace.outerBonsplitController.createTab(title: tabTitle, icon: nil) else {
+            // Roll back: re-attach to the source workspace to avoid panel loss.
+            if let fallbackPaneId = currentInnerBonsplit?.allPaneIds.first {
+                _ = attachDetachedSurface(detached, inPane: fallbackPaneId, focus: false)
+            }
+            return false
+        }
+
+        guard let newInner = targetWorkspace.innerBonsplits[newOuterTabId],
+              let newPaneId = newInner.allPaneIds.first else { return false }
+
+        // Remove the placeholder surface seeded by `handleOuterDidCreateTab`.
+        let placeholderTabs = newInner.tabs(inPane: newPaneId)
+        for placeholder in placeholderTabs {
+            let placeholderTabId = placeholder.id
+            guard let placeholderPanelId = targetWorkspace.panelIdFromSurfaceId(placeholderTabId) else { continue }
+            _ = targetWorkspace.discardClosedPanelLifecycleState(
+                panelId: placeholderPanelId,
+                tabId: placeholderTabId,
+                paneId: newPaneId,
+                panel: targetWorkspace.panels[placeholderPanelId],
+                origin: "drop_surface_wstab_placeholder",
+                closePanel: true,
+                publishSurfaceClosedEvent: false,
+                clearSurfaceNotifications: false,
+                requestTransferredRemoteCleanup: false,
+                cleanupControllerSurfaceState: true
+            )
+            _ = newInner.closeTab(placeholderTabId, inPane: newPaneId)
+        }
+
+        // Select the new outer tab so `targetWorkspace.bonsplitController` resolves to
+        // `newInner`, then attach the promoted surface. `attachDetachedSurface` registers
+        // the panel in `targetWorkspace.panels` and calls `updateWorkspaceId` / `reattach`.
+        targetWorkspace.outerBonsplitController.selectTab(newOuterTabId)
+        _ = targetWorkspace.attachDetachedSurface(detached, inPane: newPaneId, focus: true)
+        return true
+    }
+}
+
 // MARK: - Socket-driven actions
 
 @MainActor

@@ -106,6 +106,11 @@ extension Workspace {
         let controller = BonsplitController(configuration: config)
         controller.delegate = self
         controller.contextMenuShortcuts = Self.buildContextMenuShortcuts()
+        // Wire the same drop/context hooks that the init-path inner controller receives.
+        // Without this, workspace tabs created after init silently drop drags and miss
+        // context-menu destinations. `configureInnerBonsplitHooks(in:)` is defined in
+        // Workspace.swift where `bonsplitTabMoveDestinations` (private) is accessible.
+        configureInnerBonsplitHooks(in: controller)
         return controller
     }
 

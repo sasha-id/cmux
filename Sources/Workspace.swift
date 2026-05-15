@@ -7954,17 +7954,14 @@ final class Workspace: Identifiable, ObservableObject {
             innerController.closeTab(welcomeTabId)
         }
 
-        innerController.onExternalTabDrop = { [weak self] request in
-            self?.handleExternalTabDrop(request) ?? false
-        }
-        innerController.onExternalFileDrop = { [weak self] request in
-            self?.handleExternalFileDrop(request) ?? false
-        }
-        innerController.tabContextMoveDestinationsProvider = { [weak self] tabId, _ in
-            self?.bonsplitTabMoveDestinations(for: tabId) ?? []
-        }
-        innerController.onTabCloseRequest = { [weak self] tabId, _ in
-            self?.markExplicitClose(surfaceId: tabId)
+        configureInnerBonsplitHooks(in: innerController)
+
+        // Wire the outer Bonsplit's external-drop handler.
+        // The outer strip receives drops from two sources:
+        //   (a) inner-pane tab headers dragged up to the outer strip — promote to new workspace tab
+        //   (b) outer tabs from a different workspace — transfer the whole workspace tab here
+        outerBonsplitController.onExternalTabDrop = { [weak self] request in
+            self?.handleOuterExternalTabDrop(request) ?? false
         }
 
         // Set ourselves as delegate for both outer and inner controllers
@@ -13364,6 +13361,46 @@ final class Workspace: Identifiable, ObservableObject {
         return moved
     }
 
+    /// Handle a drop onto the **outer** (workspace-level) tab strip.
+    ///
+    /// Two cases:
+    /// (a) Inner-surface tab dragged up to the outer strip → promote the surface to a new
+    ///     workspace tab inside this workspace (same workspace) or move it as a new outer tab
+    ///     when the source lives in a different workspace.
+    /// (b) Outer tab from another workspace dragged here → transfer the entire outer tab with
+    ///     its inner Bonsplit and panels via `transferWorkspaceTab`.
+    func handleOuterExternalTabDrop(_ request: BonsplitController.ExternalTabDropRequest) -> Bool {
+        guard let app = AppDelegate.shared else { return false }
+        let tabUUID = request.tabId.uuid
+
+        // Case (a): tab UUID is an inner surface tab ID.
+        // Search all workspaces for a surface mapped to this UUID.
+        for ctx in app.mainWindowContexts.values {
+            for workspace in ctx.tabManager.tabs {
+                let bonsplitTabId = Bonsplit.TabID(uuid: tabUUID)
+                // `panelIdFromSurfaceId` checks the surfaceIdToPanelId map — inner tabs only.
+                if workspace.panelIdFromSurfaceId(bonsplitTabId) != nil {
+                    // Found an inner surface. Route to the promote/cross-workspace-move path.
+                    return workspace.dropSurfaceAsNewWorkspaceTab(surfaceTabId: bonsplitTabId, targetWorkspace: self)
+                }
+            }
+        }
+
+        // Case (b): tab UUID is an outer tab ID.
+        for ctx in app.mainWindowContexts.values {
+            if let sourceWorkspace = ctx.tabManager.workspaceContainingOuterTab(request.tabId) {
+                guard sourceWorkspace !== self else {
+                    // Same workspace outer-tab reorder is handled natively by Bonsplit; skip.
+                    return false
+                }
+                sourceWorkspace.transferWorkspaceTab(request.tabId, to: self)
+                return true
+            }
+        }
+
+        return false
+    }
+
 }
 
 // MARK: - BonsplitDelegate
@@ -14699,6 +14736,26 @@ extension Workspace: BonsplitDelegate {
             panels.removeValue(forKey: terminalPanel.id)
             panelTitles.removeValue(forKey: terminalPanel.id)
             terminalInheritanceFontPointsByPanelId.removeValue(forKey: terminalPanel.id)
+        }
+    }
+
+    /// Wire the standard drop/context callbacks onto an inner Bonsplit controller.
+    ///
+    /// Called from the init path (initial inner controller) and from
+    /// `makeInnerBonsplitController()` (new tabs added after init). Centralised here so
+    /// both paths stay in sync and `bonsplitTabMoveDestinations` stays private to Workspace.swift.
+    func configureInnerBonsplitHooks(in controller: BonsplitController) {
+        controller.onExternalTabDrop = { [weak self] request in
+            self?.handleExternalTabDrop(request) ?? false
+        }
+        controller.onExternalFileDrop = { [weak self] request in
+            self?.handleExternalFileDrop(request) ?? false
+        }
+        controller.tabContextMoveDestinationsProvider = { [weak self] tabId, _ in
+            self?.bonsplitTabMoveDestinations(for: tabId) ?? []
+        }
+        controller.onTabCloseRequest = { [weak self] tabId, _ in
+            self?.markExplicitClose(surfaceId: tabId)
         }
     }
 }
