@@ -39,6 +39,16 @@ enum CmuxSocketEventMapper {
         switch method {
         case "window.create", "window.focus", "window.close":
             break
+        case "wstab.create":
+            publishResult(name: "wstab.created", category: "wstab", method: method, params: params, result: result)
+        case "wstab.close":
+            publishResult(name: "wstab.closed", category: "wstab", method: method, params: params, result: result)
+        case "wstab.focus", "wstab.last":
+            publishResult(name: "wstab.focused", category: "wstab", method: method, params: params, result: result)
+        case "wstab.reorder":
+            publishResult(name: "wstab.reordered", category: "wstab", method: method, params: params, result: result)
+        case "wstab.move_to_workspace":
+            publishResult(name: "wstab.moved", category: "wstab", method: method, params: params, result: result)
         case "workspace.create", "workspace.select", "workspace.next", "workspace.previous", "workspace.last", "workspace.close":
             break
         case "workspace.rename":
