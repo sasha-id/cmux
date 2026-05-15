@@ -446,7 +446,7 @@ final class PiVaultAgentPersistenceTests: XCTestCase {
         XCTAssertTrue(SessionPersistenceStore.save(snapshot, fileURL: snapshotURL))
         let loadedAgent = try XCTUnwrap(
             SessionPersistenceStore.load(fileURL: snapshotURL)?.windows.first?
-                .tabManager.workspaces.first?.panels.first?.terminal?.agent
+                .tabManager.workspaces.first?.panels?.first?.terminal?.agent
         )
 
         XCTAssertEqual(loadedAgent.kind.rawValue, "pi")

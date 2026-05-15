@@ -381,6 +381,109 @@ struct AppSessionSnapshot: Codable, Sendable {
     var windows: [SessionWindowSnapshot]
 }
 
+// MARK: - SessionPersistence namespace
+
+enum SessionPersistence {}
+
+extension SessionPersistence {
+    /// Convert a legacy single-layout workspace snapshot into the new tabs-based shape.
+    /// New-shape snapshots are passed through unchanged (with the legacy `layout`/`panels` fields cleared).
+    static func normalizeWorkspaceSnapshot(_ snapshot: SessionWorkspaceSnapshot) -> SessionWorkspaceSnapshot {
+        if let tabs = snapshot.tabs, !tabs.isEmpty {
+            var clean = snapshot
+            clean.layout = nil
+            clean.panels = nil
+            return clean
+        }
+
+        guard let legacyLayout = snapshot.layout, let legacyPanels = snapshot.panels else {
+            return snapshot
+        }
+
+        // Walk panes in tree order, collecting (paneIndex, panelIds, selectedPanelId).
+        var paneRecords: [(panelIds: [UUID], selectedPanelId: UUID?)] = []
+        collectPanesInTreeOrder(legacyLayout, into: &paneRecords)
+
+        // Lifted layout = same shape as legacy but each pane keeps only its selectedPanelId.
+        let liftedLayout = withSelectedOnly(legacyLayout)
+        let liftedPanelIds = paneRecords.compactMap { $0.selectedPanelId }
+        let liftedPanels = legacyPanels.filter { liftedPanelIds.contains($0.id) }
+
+        let primaryTab = SessionWorkspaceTabSnapshot(
+            id: UUID(),
+            title: snapshot.customTitle ?? snapshot.processTitle,
+            isFocused: true,
+            layout: liftedLayout,
+            panels: liftedPanels
+        )
+
+        // Non-selected panels lift to single-pane workspace tabs in tree order.
+        var liftedTabs: [SessionWorkspaceTabSnapshot] = [primaryTab]
+        for record in paneRecords {
+            for panelId in record.panelIds where panelId != record.selectedPanelId {
+                guard let panel = legacyPanels.first(where: { $0.id == panelId }) else { continue }
+                let title = panelTitle(panel) ?? "Tab"
+                let pane = SessionPaneLayoutSnapshot(panelIds: [panel.id], selectedPanelId: panel.id)
+                liftedTabs.append(
+                    SessionWorkspaceTabSnapshot(
+                        id: UUID(),
+                        title: title,
+                        isFocused: false,
+                        layout: .pane(pane),
+                        panels: [panel]
+                    )
+                )
+            }
+        }
+
+        var migrated = snapshot
+        migrated.tabs = liftedTabs
+        migrated.layout = nil
+        migrated.panels = nil
+        return migrated
+    }
+
+    private static func collectPanesInTreeOrder(
+        _ layout: SessionWorkspaceLayoutSnapshot,
+        into records: inout [(panelIds: [UUID], selectedPanelId: UUID?)]
+    ) {
+        switch layout {
+        case .pane(let pane):
+            records.append((pane.panelIds, pane.selectedPanelId))
+        case .split(let split):
+            collectPanesInTreeOrder(split.first, into: &records)
+            collectPanesInTreeOrder(split.second, into: &records)
+        }
+    }
+
+    private static func withSelectedOnly(
+        _ layout: SessionWorkspaceLayoutSnapshot
+    ) -> SessionWorkspaceLayoutSnapshot {
+        switch layout {
+        case .pane(let pane):
+            let selectedId = pane.selectedPanelId
+            return .pane(SessionPaneLayoutSnapshot(
+                panelIds: selectedId.map { [$0] } ?? [],
+                selectedPanelId: selectedId
+            ))
+        case .split(let split):
+            return .split(SessionSplitLayoutSnapshot(
+                orientation: split.orientation,
+                dividerPosition: split.dividerPosition,
+                first: withSelectedOnly(split.first),
+                second: withSelectedOnly(split.second)
+            ))
+        }
+    }
+
+    private static func panelTitle(_ panel: SessionPanelSnapshot) -> String? {
+        // SessionPanelSnapshot is a struct; title is its top-level property.
+        return panel.customTitle ?? panel.title
+    }
+}
+
+// MARK: - SessionPersistenceStore
+
 enum SessionPersistenceStore {
     static func load(fileURL: URL? = nil) -> AppSessionSnapshot? {
         guard let fileURL = fileURL ?? defaultSnapshotFileURL() else { return nil }

@@ -7524,7 +7524,7 @@ extension TabManager {
                 portOrdinal: ordinal
             )
             workspace.owningTabManager = self
-            workspace.restoreSessionSnapshot(workspaceSnapshot)
+            workspace.restoreSessionSnapshot(SessionPersistence.normalizeWorkspaceSnapshot(workspaceSnapshot))
             wireClosedBrowserTracking(for: workspace)
             newTabs.append(workspace)
         }

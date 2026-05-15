@@ -62,6 +62,7 @@
 		8F033668D0A0F8C35EC69056 /* SessionWorkspaceTabSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5D56EDFED60D717BA14A55A /* SessionWorkspaceTabSnapshotTests.swift */; };
 		988C6A036BA56EA5759A95A0 /* SidebarWorkspaceSnapshotRefreshPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50D9BCE46701FBA91C2EFB6 /* SidebarWorkspaceSnapshotRefreshPolicy.swift */; };
 		9C1BEA3D2E6F49709A71C020 /* TerminalControllerSocketWriteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C1BEA3D2E6F49709A71C021 /* TerminalControllerSocketWriteTests.swift */; };
+		9F4772368D149413D672271E /* SessionWorkspaceTabsMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB22AE58F92421E94CFE91DF /* SessionWorkspaceTabsMigrationTests.swift */; };
 		A11EAA000000000000000000 /* AppearanceSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11EAA000000000000000001 /* AppearanceSettingsTests.swift */; };
 		A11EAB000000000000000000 /* AppearanceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11EAB000000000000000001 /* AppearanceSettings.swift */; };
 		A11EAC000000000000000000 /* GhosttyTerminalAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11EAC000000000000000001 /* GhosttyTerminalAppearance.swift */; };
@@ -830,6 +831,7 @@
 		C7A50C000000000000000001 /* CmuxTopProcessCPUTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CmuxTopProcessCPUTests.swift; sourceTree = "<group>"; };
 		C7A50D000000000000000001 /* CmuxTopProcessCPUTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CmuxTopProcessCPUTracker.swift; sourceTree = "<group>"; };
 		C7A50E000000000000000001 /* CmuxTopProcessDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CmuxTopProcessDetails.swift; sourceTree = "<group>"; };
+		CB22AE58F92421E94CFE91DF /* SessionWorkspaceTabsMigrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionWorkspaceTabsMigrationTests.swift; sourceTree = "<group>"; };
 		D0B10001A1B2C3D4E5F60001 /* TerminalPaneDropTargetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalPaneDropTargetView.swift; sourceTree = "<group>"; };
 		D0B10003A1B2C3D4E5F60001 /* BonsplitTabBarPassThrough.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BonsplitTabBarPassThrough.swift; sourceTree = "<group>"; };
 		D0B10005A1B2C3D4E5F60001 /* WorkspacePortalPaneDrop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspacePortalPaneDrop.swift; sourceTree = "<group>"; };
@@ -1535,6 +1537,7 @@
 				FE002002 /* FileExplorerStoreTests.swift */,
 				FE002003 /* FileSearchRipgrepParserTests.swift */,
 				A5D56EDFED60D717BA14A55A /* SessionWorkspaceTabSnapshotTests.swift */,
+				CB22AE58F92421E94CFE91DF /* SessionWorkspaceTabsMigrationTests.swift */,
 			);
 			path = cmuxTests;
 			sourceTree = "<group>";
@@ -2274,6 +2277,7 @@
 				FE002102 /* FileExplorerStoreTests.swift in Sources */,
 				FE002103 /* FileSearchRipgrepParserTests.swift in Sources */,
 				8F033668D0A0F8C35EC69056 /* SessionWorkspaceTabSnapshotTests.swift in Sources */,
+				9F4772368D149413D672271E /* SessionWorkspaceTabsMigrationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

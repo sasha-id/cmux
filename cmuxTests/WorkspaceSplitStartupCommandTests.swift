@@ -116,7 +116,7 @@ final class WorkspaceSplitStartupCommandTests: XCTestCase {
         ))
 
         let snapshot = workspace.sessionSnapshot(includeScrollback: false)
-        let hudSnapshot = try XCTUnwrap(snapshot.panels.first { $0.id == hudPanel.id })
+        let hudSnapshot = try XCTUnwrap(snapshot.panels?.first { $0.id == hudPanel.id })
         XCTAssertEqual(hudSnapshot.terminal?.tmuxStartCommand, tmuxStartCommand)
 
         let restored = Workspace()
@@ -149,7 +149,7 @@ final class WorkspaceSplitStartupCommandTests: XCTestCase {
         ))
 
         let snapshot = workspace.sessionSnapshot(includeScrollback: false)
-        let panelSnapshot = try XCTUnwrap(snapshot.panels.first { $0.id == panel.id })
+        let panelSnapshot = try XCTUnwrap(snapshot.panels?.first { $0.id == panel.id })
         XCTAssertNil(panelSnapshot.terminal?.tmuxStartCommand)
         XCTAssertNil(Workspace.restorableTmuxStartCommand(genericCommand))
     }

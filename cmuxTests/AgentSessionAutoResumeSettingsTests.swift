@@ -94,19 +94,19 @@ final class AgentSessionAutoResumeSettingsTests: XCTestCase {
         XCTAssertEqual(disabledInput.byteCount, 0)
         XCTAssertEqual(
             restoredWithoutAutoResume.sessionSnapshot(includeScrollback: false)
-                .panels.first?.terminal?.agent?.sessionId,
+                .panels?.first?.terminal?.agent?.sessionId,
             "codex-auto-resume-disabled-session"
         )
 
         restoredWithoutAutoResume.updatePanelShellActivityState(panelId: disabledPanelId, state: .promptIdle)
         XCTAssertEqual(
             restoredWithoutAutoResume.sessionSnapshot(includeScrollback: false)
-                .panels.first?.terminal?.agent?.sessionId,
+                .panels?.first?.terminal?.agent?.sessionId,
             "codex-auto-resume-disabled-session"
         )
 
         restoredWithoutAutoResume.updatePanelShellActivityState(panelId: disabledPanelId, state: .commandRunning)
-        XCTAssertNil(restoredWithoutAutoResume.sessionSnapshot(includeScrollback: false).panels.first?.terminal?.agent)
+        XCTAssertNil(restoredWithoutAutoResume.sessionSnapshot(includeScrollback: false).panels?.first?.terminal?.agent)
     }
 
     private func makeRestorableAgentIndex(

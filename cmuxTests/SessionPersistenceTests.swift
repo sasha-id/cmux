@@ -67,7 +67,7 @@ final class SessionPersistenceTests: XCTestCase {
         workspace.surfaceListeningPorts[panelId] = [6969]
 
         let snapshot = workspace.sessionSnapshot(includeScrollback: false)
-        let panelSnapshot = try XCTUnwrap(snapshot.panels.first { $0.id == panelId })
+        let panelSnapshot = try XCTUnwrap(snapshot.panels?.first { $0.id == panelId })
 
         XCTAssertTrue(panelSnapshot.listeningPorts.isEmpty)
     }
@@ -1044,11 +1044,11 @@ final class SessionPersistenceTests: XCTestCase {
 
         restored.updatePanelShellActivityState(panelId: restoredPanelId, state: .commandRunning)
         let autoResumeSnapshot = restored.sessionSnapshot(includeScrollback: false)
-        XCTAssertEqual(autoResumeSnapshot.panels.first?.terminal?.agent?.sessionId, "codex-restored-session")
+        XCTAssertEqual(autoResumeSnapshot.panels?.first?.terminal?.agent?.sessionId, "codex-restored-session")
 
         restored.updatePanelShellActivityState(panelId: restoredPanelId, state: .promptIdle)
         let exitedAgentSnapshot = restored.sessionSnapshot(includeScrollback: false)
-        XCTAssertNil(exitedAgentSnapshot.panels.first?.terminal?.agent)
+        XCTAssertNil(exitedAgentSnapshot.panels?.first?.terminal?.agent)
     }
 
     @MainActor
@@ -1073,11 +1073,11 @@ final class SessionPersistenceTests: XCTestCase {
         let restored = Workspace()
         restored.restoreSessionSnapshot(snapshot)
         let restoredPanelId = try XCTUnwrap(restored.focusedPanelId)
-        XCTAssertNil(restored.sessionSnapshot(includeScrollback: false).panels.first?.terminal?.agent?.resumeCommand)
+        XCTAssertNil(restored.sessionSnapshot(includeScrollback: false).panels?.first?.terminal?.agent?.resumeCommand)
 
         restored.updatePanelShellActivityState(panelId: restoredPanelId, state: .commandRunning)
         let userCommandSnapshot = restored.sessionSnapshot(includeScrollback: false)
-        XCTAssertNil(userCommandSnapshot.panels.first?.terminal?.agent)
+        XCTAssertNil(userCommandSnapshot.panels?.first?.terminal?.agent)
     }
 
     @MainActor
@@ -1119,14 +1119,14 @@ final class SessionPersistenceTests: XCTestCase {
             restorableAgentIndex: postPruneIndex
         )
         XCTAssertEqual(
-            postPruneSnapshot.panels.first?.terminal?.agent?.sessionId,
+            postPruneSnapshot.panels?.first?.terminal?.agent?.sessionId,
             "codex-post-prune-session"
         )
 
         restored.updatePanelShellActivityState(panelId: restoredPanelId, state: .promptIdle)
         restored.updatePanelShellActivityState(panelId: restoredPanelId, state: .commandRunning)
         let userCommandSnapshot = restored.sessionSnapshot(includeScrollback: false)
-        XCTAssertNil(userCommandSnapshot.panels.first?.terminal?.agent)
+        XCTAssertNil(userCommandSnapshot.panels?.first?.terminal?.agent)
 
         let staleWorkspace = Workspace()
         let stalePanelId = try XCTUnwrap(staleWorkspace.focusedPanelId)
@@ -1151,7 +1151,7 @@ final class SessionPersistenceTests: XCTestCase {
             includeScrollback: false,
             restorableAgentIndex: staleIndex
         )
-        XCTAssertNil(staleSnapshot.panels.first?.terminal?.agent)
+        XCTAssertNil(staleSnapshot.panels?.first?.terminal?.agent)
 
         staleWorkspace.pruneSurfaceMetadata(validSurfaceIds: [])
         let acceptedSnapshot = staleWorkspace.sessionSnapshot(
@@ -1159,7 +1159,7 @@ final class SessionPersistenceTests: XCTestCase {
             restorableAgentIndex: staleIndex
         )
         XCTAssertEqual(
-            acceptedSnapshot.panels.first?.terminal?.agent?.sessionId,
+            acceptedSnapshot.panels?.first?.terminal?.agent?.sessionId,
             "codex-prune-invalidated-session"
         )
     }
@@ -1273,7 +1273,7 @@ final class SessionPersistenceTests: XCTestCase {
                 includeScrollback: false,
                 restorableAgentIndex: staleIndex
             )
-            XCTAssertEqual(initialSnapshot.panels.first?.terminal?.agent?.kind, scenario.kind)
+            XCTAssertEqual(initialSnapshot.panels?.first?.terminal?.agent?.kind, scenario.kind)
 
             workspace.updatePanelShellActivityState(panelId: panelId, state: .promptIdle)
             workspace.updatePanelShellActivityState(panelId: panelId, state: .commandRunning)
@@ -1282,7 +1282,7 @@ final class SessionPersistenceTests: XCTestCase {
                 includeScrollback: false,
                 restorableAgentIndex: staleIndex
             )
-            XCTAssertNil(staleSnapshot.panels.first?.terminal?.agent, scenario.kind.rawValue)
+            XCTAssertNil(staleSnapshot.panels?.first?.terminal?.agent, scenario.kind.rawValue)
         }
     }
 
@@ -1304,7 +1304,7 @@ final class SessionPersistenceTests: XCTestCase {
             includeScrollback: false,
             restorableAgentIndex: staleIndex
         )
-        XCTAssertEqual(initialSnapshot.panels.first?.terminal?.agent?.sessionId, "codex-old-session")
+        XCTAssertEqual(initialSnapshot.panels?.first?.terminal?.agent?.sessionId, "codex-old-session")
 
         workspace.updatePanelShellActivityState(panelId: panelId, state: .promptIdle)
         workspace.updatePanelShellActivityState(panelId: panelId, state: .commandRunning)
@@ -1313,7 +1313,7 @@ final class SessionPersistenceTests: XCTestCase {
             includeScrollback: false,
             restorableAgentIndex: staleIndex
         )
-        XCTAssertNil(staleSnapshot.panels.first?.terminal?.agent)
+        XCTAssertNil(staleSnapshot.panels?.first?.terminal?.agent)
 
         let newIndex = try makeRestorableAgentIndex(
             workspaceId: workspace.id,
@@ -1331,7 +1331,7 @@ final class SessionPersistenceTests: XCTestCase {
             includeScrollback: false,
             restorableAgentIndex: newIndex
         )
-        let newAgent = try XCTUnwrap(newSnapshot.panels.first?.terminal?.agent)
+        let newAgent = try XCTUnwrap(newSnapshot.panels?.first?.terminal?.agent)
         XCTAssertEqual(newAgent.sessionId, "codex-new-session")
         XCTAssertEqual(
             newAgent.launchCommand?.arguments,
@@ -1365,14 +1365,14 @@ final class SessionPersistenceTests: XCTestCase {
             includeScrollback: false,
             restorableAgentIndex: runningIndex
         )
-        XCTAssertEqual(runningSnapshot.panels.first?.terminal?.agent?.sessionId, "codex-running-session")
+        XCTAssertEqual(runningSnapshot.panels?.first?.terminal?.agent?.sessionId, "codex-running-session")
 
         workspace.updatePanelShellActivityState(panelId: panelId, state: .promptIdle)
         let idleSnapshot = workspace.sessionSnapshot(
             includeScrollback: false,
             restorableAgentIndex: runningIndex
         )
-        XCTAssertNil(idleSnapshot.panels.first?.terminal?.agent)
+        XCTAssertNil(idleSnapshot.panels?.first?.terminal?.agent)
     }
 
     private func makeRestorableAgentIndex(
