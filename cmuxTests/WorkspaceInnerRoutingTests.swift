@@ -28,4 +28,20 @@ final class WorkspaceInnerRoutingTests: XCTestCase {
         XCTAssertTrue(workspace.currentInnerBonsplit === secondInner)
         XCTAssertFalse(workspace.currentInnerBonsplit === initialInner)
     }
+
+    func testOuterTabForSurfaceReturnsContainingOuterTab() {
+        let workspace = Workspace()
+        guard let firstOuterTab = workspace.outerBonsplitController.allTabIds.first,
+              let firstInner = workspace.innerBonsplits[firstOuterTab] else {
+            XCTFail("fixture should have one outer tab")
+            return
+        }
+        guard let surfaceTab = firstInner.createTab(title: "S", icon: nil) else {
+            XCTFail("inner.createTab returned nil")
+            return
+        }
+
+        let resolved = workspace.outerTab(forSurfaceTabId: surfaceTab)
+        XCTAssertEqual(resolved, firstOuterTab)
+    }
 }
