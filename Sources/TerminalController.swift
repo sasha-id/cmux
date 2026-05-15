@@ -2532,6 +2532,22 @@ class TerminalController {
         case "session.restore_previous":
             return v2Result(id: id, self.v2SessionRestorePrevious())
 
+        // Workspace tabs (wstab.*)
+        case "wstab.list":
+            return v2Result(id: id, self.v2WstabList(params: params))
+        case "wstab.create":
+            return v2Result(id: id, self.v2WstabCreate(params: params))
+        case "wstab.close":
+            return v2Result(id: id, self.v2WstabClose(params: params))
+        case "wstab.focus":
+            return v2Result(id: id, self.v2WstabFocus(params: params))
+        case "wstab.reorder":
+            return v2Result(id: id, self.v2WstabReorder(params: params))
+        case "wstab.last":
+            return v2Result(id: id, self.v2WstabLast(params: params))
+        case "wstab.move_to_workspace":
+            return v2Result(id: id, self.v2WstabMoveToWorkspace(params: params))
+
         // Settings
         case "settings.open":
             return v2Result(id: id, self.v2SettingsOpen(params: params))
@@ -2924,6 +2940,13 @@ class TerminalController {
             "window.focus",
             "window.create",
             "window.close",
+            "wstab.list",
+            "wstab.create",
+            "wstab.close",
+            "wstab.focus",
+            "wstab.reorder",
+            "wstab.last",
+            "wstab.move_to_workspace",
             "workspace.list",
             "workspace.create",
             "workspace.select",
@@ -3152,11 +3175,16 @@ class TerminalController {
                let ws = tabManager.tabs.first(where: { $0.id == wsId }) {
                 let paneUUID = ws.bonsplitController.focusedPaneId?.id
                 let surfaceUUID = ws.focusedPanelId
+                // Resolve the outer workspace-tab ID containing the focused surface (Phase F).
+                let wstabUUID: UUID? = surfaceUUID.flatMap { sid in
+                    ws.locateSurface(panelId: sid)?.outerTabId.uuid
+                }
                 focused = [
                     "window_id": v2OrNull(windowId?.uuidString),
                     "window_ref": v2Ref(kind: .window, uuid: windowId),
                     "workspace_id": wsId.uuidString,
                     "workspace_ref": v2Ref(kind: .workspace, uuid: wsId),
+                    "wstab_id": v2OrNull(wstabUUID?.uuidString),
                     "pane_id": v2OrNull(paneUUID?.uuidString),
                     "pane_ref": v2Ref(kind: .pane, uuid: paneUUID),
                     "surface_id": v2OrNull(surfaceUUID?.uuidString),
@@ -4755,6 +4783,194 @@ class TerminalController {
         return result
     }
 
+    // MARK: - Workspace-tab (wstab.*) handlers — Phase F
+
+    /// wstab.list — return [{id, title, surface_ids, focused}, ...] for a workspace.
+    /// Non-focus verb: parse params off-main, only hop to main for the actual query.
+    private func v2WstabList(params: [String: Any]) -> V2CallResult {
+        guard let workspaceIdStr = v2String(params, "workspace_id"),
+              let workspaceId = UUID(uuidString: workspaceIdStr) else {
+            return .err(code: "bad_request", message: "workspace_id required", data: nil)
+        }
+        let tabs: [[String: Any]] = v2MainSync {
+            guard let workspace = AppDelegate.shared?.tabManagerFor(tabId: workspaceId)?.tabs
+                    .first(where: { $0.id == workspaceId }) else { return [] }
+            let focusedId = workspace.currentOuterTabId
+            return workspace.outerBonsplitController.allTabIds.compactMap { tabId -> [String: Any]? in
+                guard let tab = workspace.outerBonsplitController.tab(tabId),
+                      let inner = workspace.innerBonsplits[tabId] else { return nil }
+                let surfaceIds = inner.allTabIds.compactMap { innerTabId -> String? in
+                    workspace.panelIdFromSurfaceId(innerTabId)?.uuidString
+                }
+                return [
+                    "id": tabId.uuid.uuidString,
+                    "title": tab.title,
+                    "surface_ids": surfaceIds,
+                    "focused": tabId == focusedId
+                ]
+            }
+        }
+        return .ok(["wstabs": tabs])
+    }
+
+    /// wstab.create — append a workspace tab with a default terminal surface.
+    /// Non-focus verb: params parsed off-main; mutation runs in MainActor.run block.
+    private func v2WstabCreate(params: [String: Any]) -> V2CallResult {
+        guard let workspaceIdStr = v2String(params, "workspace_id"),
+              let workspaceId = UUID(uuidString: workspaceIdStr) else {
+            return .err(code: "bad_request", message: "workspace_id required", data: nil)
+        }
+        let title = v2String(params, "title")
+        // cwd reserved for future use
+        var result: V2CallResult = .err(code: "wstab_create_failed", message: "could not create workspace tab", data: nil)
+        v2MainSync {
+            guard let workspace = AppDelegate.shared?.tabManagerFor(tabId: workspaceId)?.tabs
+                    .first(where: { $0.id == workspaceId }) else {
+                result = .err(code: "workspace_not_found", message: "workspace_id not found", data: nil)
+                return
+            }
+            guard let outerTabId = workspace.createWorkspaceTab(title: title) else { return }
+            // The didCreateTab delegate spins up the inner controller and seeds one surface synchronously.
+            let inner = workspace.innerBonsplits[outerTabId]
+            let surfaceIds: [String] = inner?.allTabIds.compactMap {
+                workspace.panelIdFromSurfaceId($0)?.uuidString
+            } ?? []
+            result = .ok([
+                "id": outerTabId.uuid.uuidString,
+                "title": title ?? workspace.title,
+                "surface_ids": surfaceIds,
+                "focused": false
+            ])
+        }
+        return result
+    }
+
+    /// wstab.close — close a specific workspace tab by its outer tab ID.
+    /// Non-focus verb.
+    private func v2WstabClose(params: [String: Any]) -> V2CallResult {
+        guard let tabIdStr = v2String(params, "wstab_id"),
+              let tabUUID = UUID(uuidString: tabIdStr) else {
+            return .err(code: "bad_request", message: "wstab_id required", data: nil)
+        }
+        let outerTabId = Bonsplit.TabID(uuid: tabUUID)
+        var found = false
+        v2MainSync {
+            guard let app = AppDelegate.shared else { return }
+            for ctx in app.mainWindowContexts.values {
+                if let workspace = ctx.tabManager.workspaceContainingOuterTab(outerTabId) {
+                    workspace.closeWorkspaceTab(outerTabId)
+                    found = true
+                    break
+                }
+            }
+        }
+        return found
+            ? .ok([:])
+            : .err(code: "wstab_not_found", message: "wstab_id not found", data: nil)
+    }
+
+    /// wstab.focus — select the target workspace tab. Focus verb: runs on main actor.
+    private func v2WstabFocus(params: [String: Any]) -> V2CallResult {
+        guard let tabIdStr = v2String(params, "wstab_id"),
+              let tabUUID = UUID(uuidString: tabIdStr) else {
+            return .err(code: "bad_request", message: "wstab_id required", data: nil)
+        }
+        let outerTabId = Bonsplit.TabID(uuid: tabUUID)
+        var found = false
+        v2MainSync {
+            guard let app = AppDelegate.shared else { return }
+            for ctx in app.mainWindowContexts.values {
+                if let workspace = ctx.tabManager.workspaceContainingOuterTab(outerTabId) {
+                    workspace.outerBonsplitController.selectTab(outerTabId)
+                    found = true
+                    break
+                }
+            }
+        }
+        return found
+            ? .ok([:])
+            : .err(code: "wstab_not_found", message: "wstab_id not found", data: nil)
+    }
+
+    /// wstab.reorder — reposition a workspace tab before or after an anchor tab.
+    /// Non-focus verb.
+    private func v2WstabReorder(params: [String: Any]) -> V2CallResult {
+        guard let tabIdStr = v2String(params, "wstab_id"),
+              let tabUUID = UUID(uuidString: tabIdStr) else {
+            return .err(code: "bad_request", message: "wstab_id required", data: nil)
+        }
+        let outerTabId = Bonsplit.TabID(uuid: tabUUID)
+        let beforeUUID = v2String(params, "before_tab_id").flatMap { UUID(uuidString: $0) }
+        let afterUUID  = v2String(params, "after_tab_id").flatMap  { UUID(uuidString: $0) }
+        let beforeId   = beforeUUID.map  { Bonsplit.TabID(uuid: $0) }
+        let afterId    = afterUUID.map   { Bonsplit.TabID(uuid: $0) }
+        var found = false
+        v2MainSync {
+            guard let app = AppDelegate.shared else { return }
+            for ctx in app.mainWindowContexts.values {
+                if let workspace = ctx.tabManager.workspaceContainingOuterTab(outerTabId) {
+                    workspace.reorderWorkspaceTab(outerTabId, before: beforeId, after: afterId)
+                    found = true
+                    break
+                }
+            }
+        }
+        return found
+            ? .ok([:])
+            : .err(code: "wstab_not_found", message: "wstab_id not found", data: nil)
+    }
+
+    /// wstab.last — re-focus the previously focused workspace tab. Focus verb.
+    private func v2WstabLast(params: [String: Any]) -> V2CallResult {
+        guard let workspaceIdStr = v2String(params, "workspace_id"),
+              let workspaceId = UUID(uuidString: workspaceIdStr) else {
+            return .err(code: "bad_request", message: "workspace_id required", data: nil)
+        }
+        var found = false
+        v2MainSync {
+            guard let workspace = AppDelegate.shared?.tabManagerFor(tabId: workspaceId)?.tabs
+                    .first(where: { $0.id == workspaceId }) else { return }
+            workspace.focusLastWorkspaceTab()
+            found = true
+        }
+        return found
+            ? .ok([:])
+            : .err(code: "workspace_not_found", message: "workspace_id not found", data: nil)
+    }
+
+    /// wstab.move_to_workspace — move a workspace tab (with all surfaces) to a different workspace.
+    /// Non-focus verb; preserves surface UUIDs via `transferWorkspaceTab`.
+    private func v2WstabMoveToWorkspace(params: [String: Any]) -> V2CallResult {
+        guard let tabIdStr = v2String(params, "wstab_id"),
+              let tabUUID = UUID(uuidString: tabIdStr),
+              let destStr = v2String(params, "dest_workspace_id"),
+              let destWorkspaceId = UUID(uuidString: destStr) else {
+            return .err(code: "bad_request", message: "wstab_id and dest_workspace_id required", data: nil)
+        }
+        let outerTabId = Bonsplit.TabID(uuid: tabUUID)
+        var result: V2CallResult = .err(code: "wstab_or_workspace_not_found", message: "could not move tab", data: nil)
+        v2MainSync {
+            // Source workspace: look up by outer tab across all windows.
+            guard let app = AppDelegate.shared else { return }
+            var sourceWorkspace: Workspace?
+            var sourceTabManager: TabManager?
+            for ctx in app.mainWindowContexts.values {
+                if let ws = ctx.tabManager.workspaceContainingOuterTab(outerTabId) {
+                    sourceWorkspace = ws
+                    sourceTabManager = ctx.tabManager
+                    break
+                }
+            }
+            guard let source = sourceWorkspace, sourceTabManager != nil else { return }
+            // Destination workspace.
+            guard let destTabManager = app.tabManagerFor(tabId: destWorkspaceId),
+                  let destination = destTabManager.tabs.first(where: { $0.id == destWorkspaceId }) else { return }
+            source.transferWorkspaceTab(outerTabId, to: destination)
+            result = .ok([:])
+        }
+        return result
+    }
+
     /// Count leaf panes in a tree node.
     private func v2CountLeaves(_ node: ExternalTreeNode) -> Int {
         switch node {
@@ -6170,59 +6386,67 @@ class TerminalController {
             return v2BrowserDisabledExternalOpenResult(rawURL: urlStr, url: url, tabManager: tabManager)
         }
 
+        // Phase F7: new semantics under the workspace-tab model.
+        // - With a `pane` (or `pane_id`) argument: the pane already holds exactly one surface
+        //   (single-surface-per-pane invariant), so auto-split that pane and return the new pane.
+        // - Without a `pane` argument: create a new workspace tab (which seeds one terminal surface)
+        //   and return the new wstab_id instead of a surface_id.
+        let requestedPaneUUID = v2UUID(params, "pane") ?? v2UUID(params, "pane_id")
+
         var result: V2CallResult = .err(code: "internal_error", message: "Failed to create surface", data: nil)
         v2MainSync {
             guard let ws = v2ResolveWorkspace(params: params, tabManager: tabManager) else {
                 result = .err(code: "not_found", message: "Workspace not found", data: nil)
                 return
             }
-            v2MaybeFocusWindow(for: tabManager)
-            v2MaybeSelectWorkspace(tabManager, workspace: ws)
 
-            let paneUUID = v2UUID(params, "pane_id")
-            let paneId: PaneID? = {
-                if let paneUUID {
-                    return ws.bonsplitController.allPaneIds.first(where: { $0.id == paneUUID })
+            if let requestedPaneUUID {
+                // Targeted pane — auto-split (single-surface invariant means we can't add a second tab).
+                guard let inner = ws.currentInnerBonsplit else {
+                    result = .err(code: "not_found", message: "No active inner Bonsplit", data: nil)
+                    return
                 }
-                return ws.bonsplitController.focusedPaneId
-            }()
+                guard let paneId = inner.allPaneIds.first(where: { $0.id == requestedPaneUUID }) else {
+                    result = .err(code: "not_found", message: "Pane not found", data: nil)
+                    return
+                }
+                let orientationStr = v2String(params, "split_orientation") ?? v2String(params, "orientation")
+                let orientation: SplitOrientation = (orientationStr == "vertical") ? .vertical : .horizontal
 
-            guard let paneId else {
-                result = .err(code: "not_found", message: "Pane not found", data: nil)
-                return
-            }
-
-            let newPanelId: UUID?
-            let focus = v2FocusAllowed(requested: v2Bool(params, "focus") ?? false)
-            if panelType == .browser {
-                newPanelId = ws.newBrowserSurface(inPane: paneId, url: url, focus: focus)?.id
-            } else {
-                newPanelId = ws.newTerminalSurface(
-                    inPane: paneId,
-                    focus: focus,
+                // Use the existing split-pane-with-terminal path (same as surface.split).
+                let newPanel = ws.splitPaneWithNewTerminal(
+                    targetPane: paneId,
+                    orientation: orientation,
+                    insertFirst: false,
                     workingDirectory: workingDirectory,
-                    initialCommand: initialCommand,
-                    tmuxStartCommand: tmuxStartCommand
-                )?.id
+                    initialInput: initialCommand
+                )
+                guard let newPanel else {
+                    result = .err(code: "internal_error", message: "Failed to create auto-split", data: nil)
+                    return
+                }
+                // Resolve the pane that now owns the newly created surface.
+                let newPaneUUID = ws.paneId(forPanelId: newPanel.id)?.id
+                let windowId = v2ResolveWindowId(tabManager: tabManager)
+                result = .ok([
+                    "window_id": v2OrNull(windowId?.uuidString),
+                    "window_ref": v2Ref(kind: .window, uuid: windowId),
+                    "workspace_id": ws.id.uuidString,
+                    "workspace_ref": v2Ref(kind: .workspace, uuid: ws.id),
+                    "pane_id": v2OrNull(newPaneUUID?.uuidString),
+                    "pane_ref": v2Ref(kind: .pane, uuid: newPaneUUID),
+                    "surface_id": newPanel.id.uuidString,
+                    "surface_ref": v2Ref(kind: .surface, uuid: newPanel.id),
+                    "type": panelType.rawValue
+                ])
+            } else {
+                // No pane — create a new workspace tab.
+                guard let outerTabId = ws.createWorkspaceTab(title: v2String(params, "title")) else {
+                    result = .err(code: "internal_error", message: "Failed to create workspace tab", data: nil)
+                    return
+                }
+                result = .ok(["wstab_id": outerTabId.uuid.uuidString])
             }
-
-            guard let newPanelId else {
-                result = .err(code: "internal_error", message: "Failed to create surface", data: nil)
-                return
-            }
-
-            let windowId = v2ResolveWindowId(tabManager: tabManager)
-            result = .ok([
-                "window_id": v2OrNull(windowId?.uuidString),
-                "window_ref": v2Ref(kind: .window, uuid: windowId),
-                "workspace_id": ws.id.uuidString,
-                "workspace_ref": v2Ref(kind: .workspace, uuid: ws.id),
-                "pane_id": paneId.id.uuidString,
-                "pane_ref": v2Ref(kind: .pane, uuid: paneId.id),
-                "surface_id": newPanelId.uuidString,
-                "surface_ref": v2Ref(kind: .surface, uuid: newPanelId),
-                "type": panelType.rawValue
-            ])
         }
         return result
     }
