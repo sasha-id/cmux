@@ -7834,7 +7834,6 @@ final class Workspace: Identifiable, ObservableObject {
         )
         // Create the outer Bonsplit controller (workspace-level tab strip).
         // Splits are disabled — the outer has exactly one pane with N workspace tabs.
-        // TODO(splits-in-tabs): replace .default appearance with CmuxBonsplitAppearance.workspaceTabBar (Task B3).
         let outerConfig = BonsplitConfiguration(
             allowSplits: false,
             allowCloseTabs: true,
@@ -7842,7 +7841,7 @@ final class Workspace: Identifiable, ObservableObject {
             allowTabReordering: true,
             allowCrossPaneTabMove: false,
             autoCloseEmptyPanes: false,
-            appearance: BonsplitConfiguration.Appearance.default
+            appearance: CmuxBonsplitAppearance.workspaceTabBar
         )
         self.outerBonsplitController = BonsplitController(configuration: outerConfig)
 
@@ -7850,7 +7849,6 @@ final class Workspace: Identifiable, ObservableObject {
         let outerWelcomeTabIds = outerBonsplitController.allTabIds
 
         // Create the initial inner Bonsplit controller for the first workspace tab.
-        // TODO(splits-in-tabs): replace .default appearance with CmuxBonsplitAppearance.paneHeader (Task B3).
         let initialInnerConfig = BonsplitConfiguration(
             allowSplits: true,
             allowCloseTabs: true,
@@ -7860,7 +7858,7 @@ final class Workspace: Identifiable, ObservableObject {
             autoCloseEmptyPanes: true,
             contentViewLifecycle: .keepAllAlive,
             newTabPosition: .current,
-            appearance: BonsplitConfiguration.Appearance.default
+            appearance: CmuxBonsplitAppearance.paneHeader
         )
         let initialInner = BonsplitController(configuration: initialInnerConfig)
 
