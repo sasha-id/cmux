@@ -15,6 +15,14 @@ extension ContentView {
             return .openFolder
         case "palette.reopenPreviousSession":
             return .reopenPreviousSession
+        case "palette.newWorkspaceTab":
+            return .newWorkspaceTab
+        case "palette.nextWorkspaceTab":
+            return .nextWorkspaceTab
+        case "palette.previousWorkspaceTab":
+            return .previousWorkspaceTab
+        case "palette.closeWorkspaceTab":
+            return .closeWorkspaceTab
         case "palette.newTerminalTab":
             return .newSurface
         case "palette.newBrowserTab":

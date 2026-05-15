@@ -6206,12 +6206,56 @@ struct ContentView: View {
                 keywords: ["reopen", "restore", "previous", "session", "resume"]
             )
         )
+        // Workspace tab commands
+        contributions.append(
+            CommandPaletteCommandContribution(
+                commandId: "palette.newWorkspaceTab",
+                title: constant(String(localized: "command.newWorkspaceTab.title", defaultValue: "New Workspace Tab")),
+                subtitle: constant(String(localized: "command.newWorkspaceTab.subtitle", defaultValue: "Workspace Tab")),
+                shortcutHint: "⌘T",
+                keywords: ["new", "workspace", "tab", "create"]
+            )
+        )
+        contributions.append(
+            CommandPaletteCommandContribution(
+                commandId: "palette.nextWorkspaceTab",
+                title: constant(String(localized: "command.nextWorkspaceTab.title", defaultValue: "Next Workspace Tab")),
+                subtitle: constant(String(localized: "command.nextWorkspaceTab.subtitle", defaultValue: "Workspace Tab")),
+                shortcutHint: "⌘⇧]",
+                keywords: ["next", "workspace", "tab"]
+            )
+        )
+        contributions.append(
+            CommandPaletteCommandContribution(
+                commandId: "palette.previousWorkspaceTab",
+                title: constant(String(localized: "command.previousWorkspaceTab.title", defaultValue: "Previous Workspace Tab")),
+                subtitle: constant(String(localized: "command.previousWorkspaceTab.subtitle", defaultValue: "Workspace Tab")),
+                shortcutHint: "⌘⇧[",
+                keywords: ["previous", "prev", "workspace", "tab"]
+            )
+        )
+        contributions.append(
+            CommandPaletteCommandContribution(
+                commandId: "palette.closeWorkspaceTab",
+                title: constant(String(localized: "command.closeWorkspaceTab.title", defaultValue: "Close Workspace Tab")),
+                subtitle: constant(String(localized: "command.closeWorkspaceTab.subtitle", defaultValue: "Workspace Tab")),
+                shortcutHint: "⌘W",
+                keywords: ["close", "workspace", "tab"]
+            )
+        )
+        contributions.append(
+            CommandPaletteCommandContribution(
+                commandId: "palette.promotePane",
+                title: constant(String(localized: "command.promotePane.title", defaultValue: "Promote to New Workspace Tab")),
+                subtitle: constant(String(localized: "command.promotePane.subtitle", defaultValue: "Workspace Tab")),
+                keywords: ["promote", "pane", "move", "workspace", "tab", "split"]
+            )
+        )
         contributions.append(
             CommandPaletteCommandContribution(
                 commandId: "palette.newTerminalTab",
                 title: constant(String(localized: "command.newTerminalTab.title", defaultValue: "New Tab (Terminal)")),
                 subtitle: constant(String(localized: "command.newTerminalTab.subtitle", defaultValue: "Tab")),
-                shortcutHint: "⌘T",
                 keywords: ["new", "terminal", "tab"]
             )
         )
@@ -6230,7 +6274,6 @@ struct ContentView: View {
                 commandId: "palette.closeTab",
                 title: constant(String(localized: "command.closeTab.title", defaultValue: "Close Tab")),
                 subtitle: constant(String(localized: "command.closeTab.subtitle", defaultValue: "Tab")),
-                shortcutHint: "⌘W",
                 keywords: ["close", "tab"]
             )
         )
@@ -7148,6 +7191,24 @@ struct ContentView: View {
         }
         registry.register(commandId: "palette.uninstallCLI") {
             AppDelegate.shared?.uninstallCmuxCLIInPath(nil)
+        }
+        // Workspace tab command handlers
+        registry.register(commandId: "palette.newWorkspaceTab") {
+            tabManager.selectedWorkspace?.createWorkspaceTab()
+        }
+        registry.register(commandId: "palette.nextWorkspaceTab") {
+            tabManager.selectedWorkspace?.selectNextWorkspaceTab()
+        }
+        registry.register(commandId: "palette.previousWorkspaceTab") {
+            tabManager.selectedWorkspace?.selectPreviousWorkspaceTab()
+        }
+        registry.register(commandId: "palette.closeWorkspaceTab") {
+            tabManager.selectedWorkspace?.closeCurrentWorkspaceTab()
+        }
+        registry.register(commandId: "palette.promotePane") {
+            guard let workspace = tabManager.selectedWorkspace,
+                  let focusedPaneId = workspace.currentInnerBonsplit?.focusedPaneId else { return }
+            workspace.promotePane(focusedPaneId)
         }
         registry.register(commandId: "palette.newTerminalTab") {
             if !executeConfiguredAction(id: CmuxSurfaceTabBarBuiltInAction.newTerminal.configID) {
