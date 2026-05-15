@@ -2547,6 +2547,8 @@ class TerminalController {
             return v2Result(id: id, self.v2WstabLast(params: params))
         case "wstab.move_to_workspace":
             return v2Result(id: id, self.v2WstabMoveToWorkspace(params: params))
+        case "wstab.promote_surface_drop":
+            return v2Result(id: id, self.v2WstabPromoteSurfaceDrop(params: params))
 
         // Settings
         case "settings.open":
@@ -4967,6 +4969,63 @@ class TerminalController {
                   let destination = destTabManager.tabs.first(where: { $0.id == destWorkspaceId }) else { return }
             source.transferWorkspaceTab(outerTabId, to: destination)
             result = .ok([:])
+        }
+        return result
+    }
+
+    /// wstab.promote_surface_drop — promote an inner surface to a new workspace tab via the
+    /// same code path used by the UI drag-and-drop handler.
+    ///
+    /// Params: `surface_id` (UUID string, inner surface / bonsplit tab ID),
+    ///         `target_workspace_id` (UUID string).
+    /// Non-focus verb.
+    private func v2WstabPromoteSurfaceDrop(params: [String: Any]) -> V2CallResult {
+        guard let surfaceIdStr = v2String(params, "surface_id"),
+              let surfaceUUID = UUID(uuidString: surfaceIdStr),
+              let targetStr = v2String(params, "target_workspace_id"),
+              let targetWorkspaceId = UUID(uuidString: targetStr) else {
+            return .err(code: "bad_request",
+                        message: "surface_id and target_workspace_id required",
+                        data: nil)
+        }
+        let surfaceTabId = Bonsplit.TabID(uuid: surfaceUUID)
+        var result: V2CallResult = .err(code: "promote_failed",
+                                        message: "could not promote surface to workspace tab",
+                                        data: nil)
+        v2MainSync {
+            guard let app = AppDelegate.shared else { return }
+            // Locate the source workspace that owns this inner surface.
+            var sourceWorkspace: Workspace?
+            for ctx in app.mainWindowContexts.values {
+                for ws in ctx.tabManager.tabs {
+                    if ws.panelIdFromSurfaceId(surfaceTabId) != nil {
+                        sourceWorkspace = ws
+                        break
+                    }
+                }
+                if sourceWorkspace != nil { break }
+            }
+            guard let source = sourceWorkspace else {
+                result = .err(code: "surface_not_found",
+                              message: "surface_id not found in any workspace",
+                              data: nil)
+                return
+            }
+            // Locate the target workspace.
+            guard let destManager = app.tabManagerFor(tabId: targetWorkspaceId),
+                  let destination = destManager.tabs.first(where: { $0.id == targetWorkspaceId }) else {
+                result = .err(code: "workspace_not_found",
+                              message: "target_workspace_id not found",
+                              data: nil)
+                return
+            }
+            let promoted = source.dropSurfaceAsNewWorkspaceTab(
+                surfaceTabId: surfaceTabId,
+                targetWorkspace: destination
+            )
+            result = promoted ? .ok([:]) : .err(code: "promote_failed",
+                                                 message: "dropSurfaceAsNewWorkspaceTab returned false",
+                                                 data: nil)
         }
         return result
     }

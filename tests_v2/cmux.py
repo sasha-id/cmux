@@ -1117,6 +1117,15 @@ class cmux:
             "dest_workspace_id": dest_workspace_id,
         }) or {}
 
+    def drag_surface_to_outer_strip(self, surface_id: str, target_workspace_id: str) -> dict:
+        """Simulate a UI drag that drops a surface onto the outer tab strip of the target
+        workspace. Backed by a dedicated socket verb `wstab.promote_surface_drop` introduced
+        for testing purposes (and used by the real UI drag handler too)."""
+        return self._call("wstab.promote_surface_drop", {
+            "surface_id": surface_id,
+            "target_workspace_id": target_workspace_id,
+        }) or {}
+
 
 def main() -> None:
     import argparse
