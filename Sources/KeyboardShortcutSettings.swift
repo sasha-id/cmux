@@ -106,6 +106,21 @@ enum KeyboardShortcutSettings {
         case newSurface
         case toggleTerminalCopyMode
 
+        // Workspace tabs
+        case newWorkspaceTab
+        case nextWorkspaceTab
+        case previousWorkspaceTab
+        case selectWorkspaceTab1
+        case selectWorkspaceTab2
+        case selectWorkspaceTab3
+        case selectWorkspaceTab4
+        case selectWorkspaceTab5
+        case selectWorkspaceTab6
+        case selectWorkspaceTab7
+        case selectWorkspaceTab8
+        case selectWorkspaceTab9
+        case closeWorkspaceTab
+
         // Panes / splits
         case focusLeft
         case focusRight
@@ -216,6 +231,19 @@ enum KeyboardShortcutSettings {
             case .toggleBrowserDeveloperTools: return String(localized: "shortcut.toggleBrowserDevTools.label", defaultValue: "Toggle Browser Developer Tools")
             case .showBrowserJavaScriptConsole: return String(localized: "shortcut.showBrowserJSConsole.label", defaultValue: "Show Browser JavaScript Console")
             case .toggleReactGrab: return String(localized: "shortcut.toggleReactGrab.label", defaultValue: "Toggle React Grab")
+            case .newWorkspaceTab: return String(localized: "shortcut.newWorkspaceTab.label", defaultValue: "New Workspace Tab")
+            case .nextWorkspaceTab: return String(localized: "shortcut.nextWorkspaceTab.label", defaultValue: "Next Workspace Tab")
+            case .previousWorkspaceTab: return String(localized: "shortcut.previousWorkspaceTab.label", defaultValue: "Previous Workspace Tab")
+            case .selectWorkspaceTab1: return String(localized: "shortcut.selectWorkspaceTab1.label", defaultValue: "Select Workspace Tab 1")
+            case .selectWorkspaceTab2: return String(localized: "shortcut.selectWorkspaceTab2.label", defaultValue: "Select Workspace Tab 2")
+            case .selectWorkspaceTab3: return String(localized: "shortcut.selectWorkspaceTab3.label", defaultValue: "Select Workspace Tab 3")
+            case .selectWorkspaceTab4: return String(localized: "shortcut.selectWorkspaceTab4.label", defaultValue: "Select Workspace Tab 4")
+            case .selectWorkspaceTab5: return String(localized: "shortcut.selectWorkspaceTab5.label", defaultValue: "Select Workspace Tab 5")
+            case .selectWorkspaceTab6: return String(localized: "shortcut.selectWorkspaceTab6.label", defaultValue: "Select Workspace Tab 6")
+            case .selectWorkspaceTab7: return String(localized: "shortcut.selectWorkspaceTab7.label", defaultValue: "Select Workspace Tab 7")
+            case .selectWorkspaceTab8: return String(localized: "shortcut.selectWorkspaceTab8.label", defaultValue: "Select Workspace Tab 8")
+            case .selectWorkspaceTab9: return String(localized: "shortcut.selectWorkspaceTab9.label", defaultValue: "Select Workspace Tab 9")
+            case .closeWorkspaceTab: return String(localized: "shortcut.closeWorkspaceTab.label", defaultValue: "Close Workspace Tab")
             }
         }
 
@@ -305,7 +333,8 @@ enum KeyboardShortcutSettings {
             case .editWorkspaceDescription:
                 return StoredShortcut(key: "e", command: true, shift: false, option: true, control: false)
             case .closeTab:
-                return StoredShortcut(key: "w", command: true, shift: false, option: false, control: false)
+                // Default removed: Cmd+W is now claimed by closeWorkspaceTab.
+                return .unbound
             case .closeOtherTabsInPane:
                 return StoredShortcut(key: "t", command: true, shift: false, option: true, control: false)
             case .closeWorkspace:
@@ -330,17 +359,22 @@ enum KeyboardShortcutSettings {
             case .splitBrowserDown:
                 return StoredShortcut(key: "d", command: true, shift: true, option: true, control: false)
             case .nextSurface:
-                return StoredShortcut(key: "]", command: true, shift: true, option: false, control: false)
+                // Default removed: Cmd+Shift+] is now claimed by nextWorkspaceTab.
+                return .unbound
             case .prevSurface:
-                return StoredShortcut(key: "[", command: true, shift: true, option: false, control: false)
+                // Default removed: Cmd+Shift+[ is now claimed by previousWorkspaceTab.
+                return .unbound
             case .selectSurfaceByNumber:
                 return StoredShortcut(key: "1", command: false, shift: false, option: false, control: true)
             case .newSurface:
-                return StoredShortcut(key: "t", command: true, shift: false, option: false, control: false)
+                // Default removed: Cmd+T is now claimed by newWorkspaceTab.
+                // Users who previously customized this keep their binding.
+                return .unbound
             case .toggleTerminalCopyMode:
                 return StoredShortcut(key: "m", command: true, shift: true, option: false, control: false)
             case .selectWorkspaceByNumber:
-                return StoredShortcut(key: "1", command: true, shift: false, option: false, control: false)
+                // Default removed: Cmd+1..9 is now claimed by selectWorkspaceTab1..9.
+                return .unbound
             case .toggleRightSidebar:
                 return StoredShortcut(key: "b", command: true, shift: false, option: true, control: false)
             case .saveFilePreview:
@@ -381,6 +415,32 @@ enum KeyboardShortcutSettings {
                 return StoredShortcut(key: "c", command: true, shift: false, option: true, control: false)
             case .toggleReactGrab:
                 return StoredShortcut(key: "g", command: true, shift: true, option: false, control: false)
+            case .newWorkspaceTab:
+                return StoredShortcut(key: "t", command: true, shift: false, option: false, control: false)
+            case .nextWorkspaceTab:
+                return StoredShortcut(key: "]", command: true, shift: true, option: false, control: false)
+            case .previousWorkspaceTab:
+                return StoredShortcut(key: "[", command: true, shift: true, option: false, control: false)
+            case .selectWorkspaceTab1:
+                return StoredShortcut(key: "1", command: true, shift: false, option: false, control: false)
+            case .selectWorkspaceTab2:
+                return StoredShortcut(key: "2", command: true, shift: false, option: false, control: false)
+            case .selectWorkspaceTab3:
+                return StoredShortcut(key: "3", command: true, shift: false, option: false, control: false)
+            case .selectWorkspaceTab4:
+                return StoredShortcut(key: "4", command: true, shift: false, option: false, control: false)
+            case .selectWorkspaceTab5:
+                return StoredShortcut(key: "5", command: true, shift: false, option: false, control: false)
+            case .selectWorkspaceTab6:
+                return StoredShortcut(key: "6", command: true, shift: false, option: false, control: false)
+            case .selectWorkspaceTab7:
+                return StoredShortcut(key: "7", command: true, shift: false, option: false, control: false)
+            case .selectWorkspaceTab8:
+                return StoredShortcut(key: "8", command: true, shift: false, option: false, control: false)
+            case .selectWorkspaceTab9:
+                return StoredShortcut(key: "9", command: true, shift: false, option: false, control: false)
+            case .closeWorkspaceTab:
+                return StoredShortcut(key: "w", command: true, shift: false, option: false, control: false)
             }
         }
 

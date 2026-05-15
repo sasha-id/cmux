@@ -660,6 +660,21 @@ struct cmuxApp: App {
                 }
             }
             Divider()
+            splitCommandButton(title: String(localized: "menu.view.newWorkspaceTab", defaultValue: "New Workspace Tab"), shortcut: menuShortcut(for: .newWorkspaceTab)) {
+                activeTabManager.selectedWorkspace?.createWorkspaceTab()
+            }
+            splitCommandButton(title: String(localized: "menu.view.nextWorkspaceTab", defaultValue: "Next Workspace Tab"), shortcut: menuShortcut(for: .nextWorkspaceTab)) {
+                activeTabManager.selectedWorkspace?.selectNextWorkspaceTab()
+            }
+            .keyboardShortcut("\t", modifiers: [.control])
+            splitCommandButton(title: String(localized: "menu.view.previousWorkspaceTab", defaultValue: "Previous Workspace Tab"), shortcut: menuShortcut(for: .previousWorkspaceTab)) {
+                activeTabManager.selectedWorkspace?.selectPreviousWorkspaceTab()
+            }
+            .keyboardShortcut("\t", modifiers: [.control, .shift])
+            splitCommandButton(title: String(localized: "menu.view.closeWorkspaceTab", defaultValue: "Close Workspace Tab"), shortcut: menuShortcut(for: .closeWorkspaceTab)) {
+                activeTabManager.selectedWorkspace?.closeCurrentWorkspaceTab()
+            }
+            Divider()
             splitCommandButton(title: String(localized: "menu.view.nextSurface", defaultValue: "Next Surface"), shortcut: menuShortcut(for: .nextSurface)) {
                 activeTabManager.selectNextSurface()
             }

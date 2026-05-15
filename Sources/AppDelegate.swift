@@ -11898,7 +11898,74 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             return true
         }
 
-        // New surface: Cmd+T
+        // Workspace tab actions
+        if matchConfiguredShortcut(event: event, action: .newWorkspaceTab) {
+            let manager = preferredMainWindowContextForShortcutRouting(event: event)?.tabManager ?? tabManager
+            manager?.selectedWorkspace?.createWorkspaceTab()
+            return true
+        }
+        if matchConfiguredShortcut(event: event, action: .nextWorkspaceTab) {
+            let manager = preferredMainWindowContextForShortcutRouting(event: event)?.tabManager ?? tabManager
+            manager?.selectedWorkspace?.selectNextWorkspaceTab()
+            return true
+        }
+        if matchConfiguredShortcut(event: event, action: .previousWorkspaceTab) {
+            let manager = preferredMainWindowContextForShortcutRouting(event: event)?.tabManager ?? tabManager
+            manager?.selectedWorkspace?.selectPreviousWorkspaceTab()
+            return true
+        }
+        if matchConfiguredShortcut(event: event, action: .selectWorkspaceTab1) {
+            let manager = preferredMainWindowContextForShortcutRouting(event: event)?.tabManager ?? tabManager
+            manager?.selectedWorkspace?.selectWorkspaceTab(at: 0)
+            return true
+        }
+        if matchConfiguredShortcut(event: event, action: .selectWorkspaceTab2) {
+            let manager = preferredMainWindowContextForShortcutRouting(event: event)?.tabManager ?? tabManager
+            manager?.selectedWorkspace?.selectWorkspaceTab(at: 1)
+            return true
+        }
+        if matchConfiguredShortcut(event: event, action: .selectWorkspaceTab3) {
+            let manager = preferredMainWindowContextForShortcutRouting(event: event)?.tabManager ?? tabManager
+            manager?.selectedWorkspace?.selectWorkspaceTab(at: 2)
+            return true
+        }
+        if matchConfiguredShortcut(event: event, action: .selectWorkspaceTab4) {
+            let manager = preferredMainWindowContextForShortcutRouting(event: event)?.tabManager ?? tabManager
+            manager?.selectedWorkspace?.selectWorkspaceTab(at: 3)
+            return true
+        }
+        if matchConfiguredShortcut(event: event, action: .selectWorkspaceTab5) {
+            let manager = preferredMainWindowContextForShortcutRouting(event: event)?.tabManager ?? tabManager
+            manager?.selectedWorkspace?.selectWorkspaceTab(at: 4)
+            return true
+        }
+        if matchConfiguredShortcut(event: event, action: .selectWorkspaceTab6) {
+            let manager = preferredMainWindowContextForShortcutRouting(event: event)?.tabManager ?? tabManager
+            manager?.selectedWorkspace?.selectWorkspaceTab(at: 5)
+            return true
+        }
+        if matchConfiguredShortcut(event: event, action: .selectWorkspaceTab7) {
+            let manager = preferredMainWindowContextForShortcutRouting(event: event)?.tabManager ?? tabManager
+            manager?.selectedWorkspace?.selectWorkspaceTab(at: 6)
+            return true
+        }
+        if matchConfiguredShortcut(event: event, action: .selectWorkspaceTab8) {
+            let manager = preferredMainWindowContextForShortcutRouting(event: event)?.tabManager ?? tabManager
+            manager?.selectedWorkspace?.selectWorkspaceTab(at: 7)
+            return true
+        }
+        if matchConfiguredShortcut(event: event, action: .selectWorkspaceTab9) {
+            let manager = preferredMainWindowContextForShortcutRouting(event: event)?.tabManager ?? tabManager
+            manager?.selectedWorkspace?.selectWorkspaceTab(at: 8)
+            return true
+        }
+        if matchConfiguredShortcut(event: event, action: .closeWorkspaceTab) {
+            let manager = preferredMainWindowContextForShortcutRouting(event: event)?.tabManager ?? tabManager
+            manager?.selectedWorkspace?.closeCurrentWorkspaceTab()
+            return true
+        }
+
+        // New surface: Cmd+T (configurable, default unbound since newWorkspaceTab takes Cmd+T)
         if matchConfiguredShortcut(event: event, action: .newSurface) {
             tabManager?.newSurface()
             return true
