@@ -2610,6 +2610,8 @@ class TerminalController {
             return v2Result(id: id, self.v2SurfaceClearHistory(params: params))
         case "surface.trigger_flash":
             return v2Result(id: id, self.v2SurfaceTriggerFlash(params: params))
+        case "surface.is_first_responder":
+            return v2Result(id: id, self.v2SurfaceIsFirstResponder(params: params))
 
         // Panes
         case "pane.list":
@@ -3002,6 +3004,7 @@ class TerminalController {
             "surface.read_text",
             "surface.clear_history",
             "surface.trigger_flash",
+            "surface.is_first_responder",
             "pane.list",
             "pane.focus",
             "pane.surfaces",
@@ -7560,6 +7563,41 @@ class TerminalController {
             result = .ok(["workspace_id": ws.id.uuidString, "workspace_ref": v2Ref(kind: .workspace, uuid: ws.id), "surface_id": surfaceId.uuidString, "surface_ref": v2Ref(kind: .surface, uuid: surfaceId), "window_id": v2OrNull(v2ResolveWindowId(tabManager: tabManager)?.uuidString), "window_ref": v2Ref(kind: .window, uuid: v2ResolveWindowId(tabManager: tabManager))])
         }
         return result
+    }
+
+    /// surface.is_first_responder — returns whether the focused surface's NSView
+    /// is the current AppKit first responder. Useful for diagnosing focus stealing
+    /// and for regression tests that verify focus is properly restored after tab switches.
+    private func v2SurfaceIsFirstResponder(params: [String: Any]) -> V2CallResult {
+        guard let tabManager = v2ResolveTabManager(params: params) else {
+            return .err(code: "unavailable", message: "TabManager not available", data: nil)
+        }
+
+        var payload: [String: Any] = ["is_first_responder": false]
+        v2MainSync {
+            guard let ws = v2ResolveWorkspace(params: params, tabManager: tabManager) else { return }
+            guard let surfaceId = ws.focusedPanelId,
+                  let panel = ws.panels[surfaceId] as? TerminalPanel else { return }
+
+            let hostedView = panel.hostedView
+            guard let window = hostedView.window else { return }
+            let fr = window.firstResponder
+            // The first responder for a terminal surface is GhosttyNSView (the inner
+            // scrollable terminal surface). Check both the hosted scroll view and any
+            // descendant of it.
+            let isFirstResponder: Bool
+            if let frView = fr as? NSView {
+                isFirstResponder = frView === hostedView || frView.isDescendant(of: hostedView)
+            } else {
+                isFirstResponder = fr === hostedView
+            }
+            payload = [
+                "is_first_responder": isFirstResponder,
+                "surface_id": surfaceId.uuidString,
+                "surface_ref": v2Ref(kind: .surface, uuid: surfaceId)
+            ]
+        }
+        return .ok(payload)
     }
 
     // MARK: - V2 Pane Methods
