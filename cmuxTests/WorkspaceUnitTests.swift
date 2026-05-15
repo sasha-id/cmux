@@ -3874,22 +3874,32 @@ final class WorkspaceTerminalConfigInheritanceSelectionTests: XCTestCase {
     }
 
     func testFallsBackToAnotherTerminalInPaneWhenSelectedTabIsBrowser() {
+        // Under the splits-inside-tabs model each pane holds exactly one surface, so a
+        // browser must live in its own pane (created via split). We verify that
+        // terminalPanelForConfigInheritance still finds the terminal when the focused pane
+        // contains only a browser.
         let manager = TabManager()
         guard let workspace = manager.selectedWorkspace,
               let terminalPanelId = workspace.focusedPanelId,
-              let paneId = workspace.paneId(forPanelId: terminalPanelId),
-              let browserPanel = workspace.newBrowserSurface(inPane: paneId, focus: true) else {
-            XCTFail("Expected workspace browser setup to succeed")
+              let browserPanel = workspace.newBrowserSplit(from: terminalPanelId, orientation: .horizontal) else {
+            XCTFail("Expected workspace browser split setup to succeed")
             return
         }
 
+        guard let browserPaneId = workspace.paneId(forPanelId: browserPanel.id) else {
+            XCTFail("Expected pane for browser panel")
+            return
+        }
+
+        workspace.focusPanel(browserPanel.id)
         XCTAssertEqual(workspace.focusedPanelId, browserPanel.id)
 
-        let sourcePanel = workspace.terminalPanelForConfigInheritance(inPane: paneId)
+        // Inheritance from the browser pane should fall back to the last-focused terminal.
+        let sourcePanel = workspace.terminalPanelForConfigInheritance(inPane: browserPaneId)
         XCTAssertEqual(
             sourcePanel?.id,
             terminalPanelId,
-            "Expected inheritance to fall back to a terminal in the pane when browser is selected"
+            "Expected inheritance to fall back to a terminal when browser-only pane is focused"
         )
     }
 
@@ -3906,17 +3916,27 @@ final class WorkspaceTerminalConfigInheritanceSelectionTests: XCTestCase {
     }
 
     func testPrefersLastFocusedTerminalWhenBrowserFocusedInDifferentPane() {
+        // Under the splits-inside-tabs model each pane holds exactly one surface.
+        // We create: left pane (terminal) | right pane (browser via split from left).
+        // After focusing left terminal then switching to the browser pane, inheritance
+        // from the browser pane should prefer the last-focused terminal (left panel).
         let manager = TabManager()
         guard let workspace = manager.selectedWorkspace,
               let leftTerminalPanelId = workspace.focusedPanelId,
-              let rightTerminalPanel = workspace.newTerminalSplit(from: leftTerminalPanelId, orientation: .horizontal),
-              let rightPaneId = workspace.paneId(forPanelId: rightTerminalPanel.id) else {
-            XCTFail("Expected split setup to succeed")
+              let browserPanel = workspace.newBrowserSplit(from: leftTerminalPanelId, orientation: .horizontal) else {
+            XCTFail("Expected browser split setup to succeed")
             return
         }
 
+        guard let rightPaneId = workspace.paneId(forPanelId: browserPanel.id) else {
+            XCTFail("Expected pane for browser panel")
+            return
+        }
+
+        // Focus the left terminal first (records last-focused terminal).
         workspace.focusPanel(leftTerminalPanelId)
-        _ = workspace.newBrowserSurface(inPane: rightPaneId, focus: true)
+        // Then focus the browser pane.
+        workspace.focusPanel(browserPanel.id)
         XCTAssertNotEqual(workspace.focusedPanelId, leftTerminalPanelId)
 
         let sourcePanel = workspace.terminalPanelForConfigInheritance(inPane: rightPaneId)

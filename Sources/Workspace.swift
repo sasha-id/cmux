@@ -7231,6 +7231,12 @@ final class Workspace: Identifiable, ObservableObject {
 
     /// When true, suppresses auto-creation in didSplitPane (programmatic splits handle their own panels)
     private var isProgrammaticSplit = false
+    /// Set to `true` by `newTerminalSurface`, `newBrowserSurface`, `attachDetachedSurface`,
+    /// and similar callers that are explicitly managing the panel-to-tab mapping. When set,
+    /// `handleInnerShouldCreateTab` permits the create even if the pane already has a tab.
+    /// UI-triggered tab creation (user clicking "+" in the inner Bonsplit) does NOT set this flag,
+    /// so the single-surface-per-pane invariant is enforced for user actions.
+    var isProgrammaticInnerTabCreate = false
     private var debugStressPreloadSelectionDepth = 0
 
     /// Last terminal panel used as an inheritance source (typically last focused terminal).
@@ -8168,6 +8174,38 @@ final class Workspace: Identifiable, ObservableObject {
 
     func surfaceIdFromPanelId(_ panelId: UUID) -> TabID? {
         surfaceIdToPanelId.first { $0.value == panelId }?.key
+    }
+
+    /// Create a tab on the inner Bonsplit, bypassing the single-surface-per-pane veto.
+    /// Use this for all programmatic surface creation (newTerminalSurface, newBrowserSurface, etc.)
+    /// where the caller explicitly manages the panel-to-tab mapping. The veto in
+    /// `handleInnerShouldCreateTab` is only enforced for UI-triggered tab creates.
+    func createInnerTab(
+        on controller: BonsplitController? = nil,
+        title: String,
+        hasCustomTitle: Bool = false,
+        icon: String? = nil,
+        iconImageData: Data? = nil,
+        kind: String? = nil,
+        isDirty: Bool = false,
+        isLoading: Bool = false,
+        isPinned: Bool = false,
+        inPane pane: PaneID? = nil
+    ) -> TabID? {
+        let target = controller ?? bonsplitController
+        isProgrammaticInnerTabCreate = true
+        defer { isProgrammaticInnerTabCreate = false }
+        return target.createTab(
+            title: title,
+            hasCustomTitle: hasCustomTitle,
+            icon: icon,
+            iconImageData: iconImageData,
+            kind: kind,
+            isDirty: isDirty,
+            isLoading: isLoading,
+            isPinned: isPinned,
+            inPane: pane
+        )
     }
 
     private func configureTerminalPanel(_ terminalPanel: TerminalPanel) {
@@ -10354,8 +10392,8 @@ final class Workspace: Identifiable, ObservableObject {
         }
         seedTerminalInheritanceFontPoints(panelId: newPanel.id, configTemplate: inheritedConfig)
 
-        // Create tab in bonsplit
-        guard let newTabId = bonsplitController.createTab(
+        // Create tab in bonsplit (programmatic — bypasses single-surface-per-pane veto)
+        guard let newTabId = createInnerTab(
             title: newPanel.displayTitle,
             icon: newPanel.displayIcon,
             kind: SurfaceKind.terminal,
@@ -10552,7 +10590,7 @@ final class Workspace: Identifiable, ObservableObject {
         panels[browserPanel.id] = browserPanel
         panelTitles[browserPanel.id] = browserPanel.displayTitle
 
-        guard let newTabId = bonsplitController.createTab(
+        guard let newTabId = createInnerTab(
             title: browserPanel.displayTitle,
             icon: browserPanel.displayIcon,
             kind: SurfaceKind.browser,
@@ -10707,7 +10745,7 @@ final class Workspace: Identifiable, ObservableObject {
         panels[markdownPanel.id] = markdownPanel
         panelTitles[markdownPanel.id] = markdownPanel.displayTitle
 
-        guard let newTabId = bonsplitController.createTab(
+        guard let newTabId = createInnerTab(
             title: markdownPanel.displayTitle,
             icon: markdownPanel.displayIcon,
             kind: SurfaceKind.markdown,
@@ -10865,7 +10903,7 @@ final class Workspace: Identifiable, ObservableObject {
         panels[filePreviewPanel.id] = filePreviewPanel
         panelTitles[filePreviewPanel.id] = filePreviewPanel.displayTitle
 
-        guard let newTabId = bonsplitController.createTab(
+        guard let newTabId = createInnerTab(
             title: filePreviewPanel.displayTitle,
             icon: filePreviewPanel.displayIcon,
             kind: SurfaceKind.filePreview,
@@ -10937,7 +10975,7 @@ final class Workspace: Identifiable, ObservableObject {
         panels[toolPanel.id] = toolPanel
         panelTitles[toolPanel.id] = toolPanel.displayTitle
 
-        guard let newTabId = bonsplitController.createTab(
+        guard let newTabId = createInnerTab(
             title: toolPanel.displayTitle,
             icon: toolPanel.displayIcon,
             kind: SurfaceKind.rightSidebarTool,
@@ -11583,7 +11621,7 @@ final class Workspace: Identifiable, ObservableObject {
             restoredUnreadPanelIds.remove(detached.panelId)
         }
 
-        guard let newTabId = bonsplitController.createTab(
+        guard let newTabId = createInnerTab(
             title: detached.title,
             hasCustomTitle: detached.customTitle?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
             icon: detached.icon,
@@ -12219,7 +12257,7 @@ final class Workspace: Identifiable, ObservableObject {
         seedTerminalInheritanceFontPoints(panelId: newPanel.id, configTemplate: inheritedConfig)
 
         // Create tab in bonsplit
-        if let newTabId = bonsplitController.createTab(
+        if let newTabId = createInnerTab(
             title: newPanel.displayTitle,
             icon: newPanel.displayIcon,
             kind: SurfaceKind.terminal,
@@ -13755,8 +13793,13 @@ extension Workspace: BonsplitDelegate {
     }
 
     func splitTabBar(_ controller: BonsplitController, shouldCloseTab tab: Bonsplit.Tab, inPane pane: PaneID) -> Bool {
-        // TODO(splits-in-tabs Phase C): Route outer shouldCloseTab to outer-tab teardown.
-        guard controller !== outerBonsplitController else { return true }
+        if controller === outerBonsplitController {
+            return handleOuterShouldCloseTab(tab)
+        }
+        return handleInnerShouldCloseTab(controller: controller, tab: tab, inPane: pane)
+    }
+
+    fileprivate func handleInnerShouldCloseTab(controller: BonsplitController, tab: Bonsplit.Tab, inPane pane: PaneID) -> Bool {
 
         func recordPostCloseSelection() {
             let tabs = controller.tabs(inPane: pane)
@@ -13863,6 +13906,14 @@ extension Workspace: BonsplitDelegate {
     }
 
     func splitTabBar(_ controller: BonsplitController, didCloseTab tabId: TabID, fromPane pane: PaneID) {
+        if controller === outerBonsplitController {
+            handleOuterDidCloseTab(tabId)
+            return
+        }
+        handleInnerDidCloseTab(controller: controller, tabId: tabId, fromPane: pane)
+    }
+
+    fileprivate func handleInnerDidCloseTab(controller: BonsplitController, tabId: TabID, fromPane pane: PaneID) {
         forceCloseTabIds.remove(tabId)
         let selectTabId = postCloseSelectTabId.removeValue(forKey: tabId)
         let closedBrowserRestoreSnapshot = pendingClosedBrowserRestoreSnapshots.removeValue(forKey: tabId)
@@ -14003,8 +14054,14 @@ extension Workspace: BonsplitDelegate {
     }
 
     func splitTabBar(_ controller: BonsplitController, didSelectTab tab: Bonsplit.Tab, inPane pane: PaneID) {
-        // TODO(splits-in-tabs Phase C): Route outer didSelectTab to handleOuterDidSelectTab.
-        guard controller !== outerBonsplitController else { return }
+        if controller === outerBonsplitController {
+            handleOuterDidSelectTab(tab)
+            return
+        }
+        handleInnerDidSelectTab(controller: controller, tab: tab, inPane: pane)
+    }
+
+    fileprivate func handleInnerDidSelectTab(controller: BonsplitController, tab: Bonsplit.Tab, inPane pane: PaneID) {
         applyTabSelection(tabId: tab.id, inPane: pane)
     }
 
@@ -14063,8 +14120,16 @@ extension Workspace: BonsplitDelegate {
     }
 
     func splitTabBar(_ controller: BonsplitController, didFocusPane pane: PaneID) {
-        // TODO(splits-in-tabs Phase C): Route outer didFocusPane to outer-tab focus handler.
-        guard controller !== outerBonsplitController else { return }
+        if controller === outerBonsplitController {
+            // The outer controller has only one pane; this fires when the workspace tab strip
+            // itself gains focus. No panel-level action is needed here yet — Task H1 will
+            // add inner pane focus restoration on outer-tab switches.
+            return
+        }
+        handleInnerDidFocusPane(controller: controller, pane: pane)
+    }
+
+    fileprivate func handleInnerDidFocusPane(controller: BonsplitController, pane: PaneID) {
         // When a pane is focused, focus its selected tab's panel
         guard let tab = controller.selectedTab(inPane: pane) else { return }
 #if DEBUG
@@ -14082,8 +14147,15 @@ extension Workspace: BonsplitDelegate {
     }
 
     func splitTabBar(_ controller: BonsplitController, didClosePane paneId: PaneID) {
-        // TODO(splits-in-tabs Phase C): Route outer didClosePane to outer-tab teardown.
-        guard controller !== outerBonsplitController else { return }
+        if controller === outerBonsplitController {
+            // The outer controller has splits disabled and allowCloseLastPane=false; this
+            // callback should never fire. Guard defensively and do nothing.
+            return
+        }
+        handleInnerDidClosePane(controller: controller, paneId: paneId)
+    }
+
+    fileprivate func handleInnerDidClosePane(controller: BonsplitController, paneId: PaneID) {
         let closedPanelIds = pendingPaneClosePanelIds.removeValue(forKey: paneId.id) ?? []
         let shouldScheduleFocusReconcile = !isDetachingCloseTransaction
 
@@ -14141,9 +14213,15 @@ extension Workspace: BonsplitDelegate {
     }
 
     func splitTabBar(_ controller: BonsplitController, didSplitPane originalPane: PaneID, newPane: PaneID, orientation: SplitOrientation) {
-        // The outer controller has splits disabled; this callback should never fire for it.
-        // Guard defensively for Phase B until Phase C wires full routing.
-        guard controller !== outerBonsplitController else { return }
+        if controller === outerBonsplitController {
+            // The outer controller has splits disabled; this callback should never fire for it.
+            // Guard defensively.
+            return
+        }
+        handleInnerDidSplitPane(controller: controller, originalPane: originalPane, newPane: newPane, orientation: orientation)
+    }
+
+    fileprivate func handleInnerDidSplitPane(controller: BonsplitController, originalPane: PaneID, newPane: PaneID, orientation: SplitOrientation) {
 #if DEBUG
         let panelKindForTab: (TabID) -> String = { tabId in
             guard let panelId = self.panelIdFromSurfaceId(tabId),
@@ -14305,7 +14383,7 @@ extension Workspace: BonsplitDelegate {
         panelTitles[newPanel.id] = newPanel.displayTitle
         seedTerminalInheritanceFontPoints(panelId: newPanel.id, configTemplate: inheritedConfig)
 
-        guard let newTabId = bonsplitController.createTab(
+        guard let newTabId = createInnerTab(
             title: newPanel.displayTitle,
             icon: newPanel.displayIcon,
             kind: SurfaceKind.terminal,
@@ -14440,8 +14518,15 @@ extension Workspace: BonsplitDelegate {
     }
 
     func splitTabBar(_ controller: BonsplitController, didRequestNewTab kind: String, inPane pane: PaneID) {
-        // TODO(splits-in-tabs Phase C): Route outer didRequestNewTab to create a new workspace tab.
-        guard controller !== outerBonsplitController else { return }
+        if controller === outerBonsplitController {
+            // User clicked the "+" button on the workspace-level tab strip: create a new workspace tab.
+            _ = outerBonsplitController.createTab(title: String(localized: "workspace.tab.defaultTitle", defaultValue: "New Tab"), icon: nil)
+            return
+        }
+        handleInnerDidRequestNewTab(controller: controller, kind: kind, inPane: pane)
+    }
+
+    fileprivate func handleInnerDidRequestNewTab(controller: BonsplitController, kind: String, inPane pane: PaneID) {
         switch kind {
         case "terminal":
             _ = newTerminalSurface(inPane: pane)
@@ -14523,8 +14608,15 @@ extension Workspace: BonsplitDelegate {
     }
 
     func splitTabBar(_ controller: BonsplitController, didChangeGeometry snapshot: LayoutSnapshot) {
-        // TODO(splits-in-tabs Phase C): Route outer geometry changes separately.
-        guard controller !== outerBonsplitController else { return }
+        if controller === outerBonsplitController {
+            // The outer controller has one fixed pane; geometry changes there don't affect
+            // terminal layout or focus. Inner controllers handle their own geometry.
+            return
+        }
+        handleInnerDidChangeGeometry(controller: controller, snapshot: snapshot)
+    }
+
+    fileprivate func handleInnerDidChangeGeometry(controller: BonsplitController, snapshot: LayoutSnapshot) {
         tmuxLayoutSnapshot = snapshot
         scheduleTerminalGeometryReconcile()
         if !isDetachingCloseTransaction {
@@ -14533,4 +14625,60 @@ extension Workspace: BonsplitDelegate {
     }
 
     // No post-close polling refresh loop: we rely on view invariants and Ghostty's wakeups.
+
+    // MARK: - Inner Bonsplit seeding
+
+    /// Seed `inner` with a single default terminal surface.
+    /// Called from `handleOuterDidCreateTab` when a new workspace tab is created.
+    /// Defined here (not in Workspace+OuterDelegate.swift) so it can access private helpers.
+    ///
+    /// - Important: Welcome tabs are removed BEFORE calling `createTab` so the
+    ///   `handleInnerShouldCreateTab` veto (which blocks a second tab per pane) does not
+    ///   fire against the auto-created Welcome tab.
+    func spawnDefaultSurface(in inner: BonsplitController) {
+        guard let paneId = inner.allPaneIds.first else { return }
+
+        // Remove the BonsplitController-auto-created Welcome tab(s) first.
+        // Use a temporary nil-delegate to avoid firing didCloseTab for the Welcome tabs,
+        // which would cascade into discardClosedPanelLifecycleState for non-existent panels.
+        let savedDelegate = inner.delegate
+        inner.delegate = nil
+        for welcomeTabId in inner.allTabIds {
+            inner.closeTab(welcomeTabId)
+        }
+        inner.delegate = savedDelegate
+        // At this point the pane is empty, so createInnerTab below will not be vetoed.
+
+        let terminalPanel = TerminalPanel(
+            workspaceId: id,
+            context: GHOSTTY_SURFACE_CONTEXT_TAB,
+            configTemplate: inheritedTerminalConfig(inPane: nil),
+            workingDirectory: nil,
+            portOrdinal: portOrdinal,
+            initialCommand: nil,
+            initialInput: nil,
+            additionalEnvironment: [:]
+        )
+        configureTerminalPanel(terminalPanel)
+        panels[terminalPanel.id] = terminalPanel
+        panelTitles[terminalPanel.id] = terminalPanel.displayTitle
+        seedTerminalInheritanceFontPoints(panelId: terminalPanel.id, configTemplate: nil as CmuxSurfaceConfigTemplate?)
+
+        if let newTabId = createInnerTab(
+            on: inner,
+            title: terminalPanel.displayTitle,
+            icon: terminalPanel.displayIcon,
+            kind: SurfaceKind.terminal,
+            isDirty: terminalPanel.isDirty,
+            isPinned: false,
+            inPane: paneId
+        ) {
+            surfaceIdToPanelId[newTabId] = terminalPanel.id
+        } else {
+            // shouldCreateTab vetoed — clean up the orphaned panel.
+            panels.removeValue(forKey: terminalPanel.id)
+            panelTitles.removeValue(forKey: terminalPanel.id)
+            terminalInheritanceFontPointsByPanelId.removeValue(forKey: terminalPanel.id)
+        }
+    }
 }
