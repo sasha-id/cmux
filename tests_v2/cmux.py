@@ -1078,6 +1078,45 @@ class cmux:
             params["label"] = label
         return dict(self._call("debug.window.screenshot", params) or {})
 
+    # ------------------------------------------------------------------
+    # Workspace-tab (wstab) helpers — Phase F
+    # ------------------------------------------------------------------
+
+    def wstab_list(self, workspace_id: str) -> list:
+        resp = self._call("wstab.list", {"workspace_id": workspace_id}) or {}
+        return list(resp.get("wstabs", []))
+
+    def wstab_create(self, workspace_id: str, title=None, cwd=None) -> dict:
+        params: Dict[str, Any] = {"workspace_id": workspace_id}
+        if title is not None:
+            params["title"] = title
+        if cwd is not None:
+            params["cwd"] = cwd
+        return self._call("wstab.create", params) or {}
+
+    def wstab_close(self, wstab_id: str) -> dict:
+        return self._call("wstab.close", {"wstab_id": wstab_id}) or {}
+
+    def wstab_focus(self, wstab_id: str) -> dict:
+        return self._call("wstab.focus", {"wstab_id": wstab_id}) or {}
+
+    def wstab_reorder(self, wstab_id: str, *, before=None, after=None) -> dict:
+        params: Dict[str, Any] = {"wstab_id": wstab_id}
+        if before is not None:
+            params["before_tab_id"] = before
+        if after is not None:
+            params["after_tab_id"] = after
+        return self._call("wstab.reorder", params) or {}
+
+    def wstab_last(self, workspace_id: str) -> dict:
+        return self._call("wstab.last", {"workspace_id": workspace_id}) or {}
+
+    def wstab_move_to_workspace(self, wstab_id: str, dest_workspace_id: str) -> dict:
+        return self._call("wstab.move_to_workspace", {
+            "wstab_id": wstab_id,
+            "dest_workspace_id": dest_workspace_id,
+        }) or {}
+
 
 def main() -> None:
     import argparse
