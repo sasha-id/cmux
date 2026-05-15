@@ -14193,6 +14193,9 @@ extension Workspace: BonsplitDelegate {
         if shouldScheduleFocusReconcile {
             scheduleFocusReconcile()
         }
+
+        // Update outer-tab pane-count affordance (#2277).
+        refreshOuterTabPaneCount(forInner: controller)
     }
 
     func splitTabBar(_ controller: BonsplitController, shouldClosePane pane: PaneID) -> Bool {
@@ -14417,6 +14420,9 @@ extension Workspace: BonsplitDelegate {
             self.scheduleTerminalGeometryReconcile()
             self.scheduleFocusReconcile()
         }
+
+        // Update outer-tab pane-count affordance (#2277).
+        refreshOuterTabPaneCount(forInner: controller)
     }
 
     private func selectedTerminalPanel(inPane pane: PaneID) -> TerminalPanel? {
