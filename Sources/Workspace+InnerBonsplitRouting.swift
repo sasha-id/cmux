@@ -121,6 +121,89 @@ extension Workspace {
     }
 }
 
+// MARK: - Socket-driven actions
+
+@MainActor
+extension Workspace {
+
+    // MARK: Transfer (wstab.move_to_workspace)
+
+    /// Move an entire workspace tab (its inner Bonsplit + all panels) to a destination workspace.
+    /// Preserves surface UUIDs, terminal state, and panel subscriptions. The source's outer tab
+    /// is removed WITHOUT disposing panels — those are moved into the destination first.
+    ///
+    /// Called by the `wstab.move_to_workspace` socket verb (Task F5).
+    func transferWorkspaceTab(_ outerTabId: Bonsplit.TabID, to destination: Workspace) {
+        guard let inner = innerBonsplits[outerTabId],
+              let tabInfo = outerBonsplitController.tab(outerTabId) else { return }
+        let title = tabInfo.title
+
+        // Collect the surface (panel) IDs in this tab.
+        let panelIds: [UUID] = inner.allTabIds.compactMap { panelIdFromSurfaceId($0) }
+
+        // Move Panel instances and subscriptions to the destination WITHOUT dispose.
+        for panelId in panelIds {
+            if let panel = panels.removeValue(forKey: panelId) {
+                destination.panels[panelId] = panel
+            }
+            if let sub = panelSubscriptions.removeValue(forKey: panelId) {
+                destination.panelSubscriptions[panelId] = sub
+            }
+        }
+
+        // Hand the inner Bonsplit reference over wholesale, preserving tab/pane IDs.
+        // Pre-register BEFORE calling `createTab(id:...)` so `handleOuterDidCreateTab`
+        // on the destination can detect the transfer via `isProgrammaticOuterTabTransfer`.
+        innerBonsplits.removeValue(forKey: outerTabId)
+        destination.innerBonsplits[outerTabId] = inner
+        inner.delegate = destination  // future delegate callbacks route to destination
+
+        // Create a matching outer tab on the destination with the same TabID so external
+        // references (event subscribers, persistence) keep working.
+        // Set the transfer flag to suppress the default "new tab = new inner + seed" behavior.
+        destination.isProgrammaticOuterTabTransfer = true
+        defer { destination.isProgrammaticOuterTabTransfer = false }
+        destination.outerBonsplitController.createTab(id: outerTabId, title: title, icon: nil)
+
+        // Close the source outer entry. Panels are already moved out, so didCloseTab
+        // will find no panels to dispose.
+        outerBonsplitController.closeTab(outerTabId)
+    }
+
+    // MARK: Reorder (wstab.reorder)
+
+    func reorderWorkspaceTab(_ outerTabId: Bonsplit.TabID, before: Bonsplit.TabID?, after: Bonsplit.TabID?) {
+        let allIds = outerBonsplitController.allTabIds
+        guard let pane = outerBonsplitController.allPaneIds.first,
+              let srcIdx = allIds.firstIndex(of: outerTabId) else { return }
+        let anchor = before ?? after
+        guard let anchor = anchor, let anchorIdx = allIds.firstIndex(of: anchor) else { return }
+        let targetIdx = (before != nil) ? anchorIdx : anchorIdx + 1
+        let normalizedIdx = targetIdx > srcIdx ? targetIdx - 1 : targetIdx
+        outerBonsplitController.moveTab(outerTabId, toPane: pane, atIndex: normalizedIdx)
+    }
+
+    // MARK: Last-focused tracking (wstab.last)
+
+    /// The outer tab ID that was focused just before the current one.
+    /// Updated by `recordOuterTabFocusChange` whenever the outer tab changes.
+    var lastFocusedOuterTabId: Bonsplit.TabID? {
+        get { _lastFocusedOuterTabId }
+        set { _lastFocusedOuterTabId = newValue }
+    }
+
+    func recordOuterTabFocusChange(from previous: Bonsplit.TabID?, to next: Bonsplit.TabID) {
+        if let previous = previous, previous != next {
+            _lastFocusedOuterTabId = previous
+        }
+    }
+
+    func focusLastWorkspaceTab() {
+        guard let last = _lastFocusedOuterTabId else { return }
+        outerBonsplitController.selectTab(last)
+    }
+}
+
 // MARK: - Routing helpers
 
 @MainActor

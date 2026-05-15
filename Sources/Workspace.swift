@@ -7189,6 +7189,20 @@ final class Workspace: Identifiable, ObservableObject {
     /// Each inner controller owns the split pane tree (and its terminal surfaces) for one workspace tab.
     @Published var innerBonsplits: [Bonsplit.TabID: BonsplitController] = [:]
 
+    /// The outer tab ID that was focused just before the current selection.
+    /// Maintained by `recordOuterTabFocusChange` for the `wstab.last` socket verb (Task F5).
+    var _lastFocusedOuterTabId: Bonsplit.TabID?
+
+    /// The outer tab ID that was selected at the start of the most recent `handleOuterDidSelectTab` call.
+    /// Used to accurately compute the "previous" tab even though `didSelectTab` fires post-selection.
+    var _trackedOuterTabIdBeforeSelect: Bonsplit.TabID?
+
+    /// When true, `handleOuterDidCreateTab` must NOT spin up a new inner Bonsplit or seed a surface.
+    /// Set during `transferWorkspaceTab` to suppress the default "new tab = new inner" behavior:
+    /// the destination workspace already received the source's inner Bonsplit before the outer
+    /// tab is created via `createTab(id:...)`.
+    var isProgrammaticOuterTabTransfer = false
+
     /// The inner Bonsplit controller for the currently selected outer workspace tab.
     var currentInnerBonsplit: BonsplitController? {
         guard let outerPane = outerBonsplitController.allPaneIds.first,

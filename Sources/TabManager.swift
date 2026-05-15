@@ -5570,6 +5570,18 @@ class TabManager: ObservableObject {
         tab.moveFocus(direction: direction)
     }
 
+    // MARK: - Workspace-tab socket helpers (Phase F)
+
+    /// Find the workspace that owns the given outer tab ID.
+    /// Performs a linear scan across all workspaces in this TabManager.
+    /// Used by wstab.* socket verbs which receive a wstab_id rather than a workspace_id.
+    @MainActor
+    func workspaceContainingOuterTab(_ outerTabId: Bonsplit.TabID) -> Workspace? {
+        return tabs.first { ws in
+            ws.innerBonsplits[outerTabId] != nil
+        }
+    }
+
     // MARK: - Recent Tab History Navigation
 
     private func recordTabInHistory(_ tabId: UUID) {

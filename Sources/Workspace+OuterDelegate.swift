@@ -26,6 +26,13 @@ extension Workspace {
     /// callback, before returning to the outer controller. Any code that accesses
     /// `currentInnerBonsplit` after `createTab` returns will therefore find the new entry.
     func handleOuterDidCreateTab(_ tab: Bonsplit.Tab) {
+        // During a `transferWorkspaceTab` call the inner controller is already registered
+        // in `innerBonsplits` before `createTab(id:...)` fires this callback, so we must
+        // NOT overwrite it or spawn a placeholder surface.
+        if isProgrammaticOuterTabTransfer {
+            // The transfer path pre-registered the inner Bonsplit; nothing to do here.
+            return
+        }
         let inner = makeInnerBonsplitController()
         // Register BEFORE calling any method that routes through bonsplitController /
         // currentInnerBonsplit, so the backing entry is present if anything queries it
@@ -71,6 +78,13 @@ extension Workspace {
     // IMPORTANT: this body is intentionally a stub for Task H1's red/green regression.
     // Task H1 will implement inner pane focus + AppKit first-responder restoration.
     func handleOuterDidSelectTab(_ tab: Bonsplit.Tab) {
+        // Track the previous outer tab for wstab.last (Phase F).
+        // `didSelectTab` fires after the controller updated its selection, so `currentOuterTabId`
+        // already returns `tab.id`. We use the helper that reads the stored previous value:
+        // `recordOuterTabFocusChange` only updates _lastFocusedOuterTabId when `from != to`
+        // and `from != nil`, so calling it with the last stored value is safe on re-entry.
+        recordOuterTabFocusChange(from: _trackedOuterTabIdBeforeSelect, to: tab.id)
+        _trackedOuterTabIdBeforeSelect = tab.id
         // TODO(H1): restore inner pane focus + AppKit first-responder. Wired in Task H1.
     }
 
