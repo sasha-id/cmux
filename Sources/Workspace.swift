@@ -7181,8 +7181,37 @@ final class Workspace: Identifiable, ObservableObject {
     /// Ordinal for CMUX_PORT range assignment (monotonically increasing per app session)
     var portOrdinal: Int = 0
 
-    /// The bonsplit controller managing the split panes for this workspace
-    let bonsplitController: BonsplitController
+    /// The outer Bonsplit controller managing the workspace-level tab strip.
+    /// One pane, N tabs; splits disabled; each tab corresponds to one inner BonsplitController.
+    let outerBonsplitController: BonsplitController
+
+    /// Inner Bonsplit controllers keyed by their corresponding outer tab ID.
+    /// Each inner controller owns the split pane tree (and its terminal surfaces) for one workspace tab.
+    @Published var innerBonsplits: [Bonsplit.TabID: BonsplitController] = [:]
+
+    /// The inner Bonsplit controller for the currently selected outer workspace tab.
+    var currentInnerBonsplit: BonsplitController? {
+        guard let outerPane = outerBonsplitController.allPaneIds.first,
+              let selectedTab = outerBonsplitController.selectedTab(inPane: outerPane) else {
+            return nil
+        }
+        return innerBonsplits[selectedTab.id]
+    }
+
+    /// The currently selected outer workspace tab ID (nil if the outer controller has no pane/tab yet).
+    var currentOuterTabId: Bonsplit.TabID? {
+        guard let outerPane = outerBonsplitController.allPaneIds.first else { return nil }
+        return outerBonsplitController.selectedTab(inPane: outerPane)?.id
+    }
+
+    /// Backward-compat alias. Returns the currently focused inner Bonsplit controller.
+    /// All existing call sites are migrated to use `currentInnerBonsplit` in Task B2.
+    var bonsplitController: BonsplitController {
+        guard let inner = currentInnerBonsplit else {
+            fatalError("Workspace has no active inner Bonsplit; should be impossible")
+        }
+        return inner
+    }
     private struct SurfaceTabBarExecutableButton {
         let button: CmuxSurfaceTabBarButton
         let builtInAction: CmuxSurfaceTabBarBuiltInAction?
@@ -7803,11 +7832,55 @@ final class Workspace: Identifiable, ObservableObject {
             newTabPosition: .current,
             appearance: appearance
         )
-        self.bonsplitController = BonsplitController(configuration: config)
-        bonsplitController.contextMenuShortcuts = Self.buildContextMenuShortcuts()
+        // Create the outer Bonsplit controller (workspace-level tab strip).
+        // Splits are disabled — the outer has exactly one pane with N workspace tabs.
+        // TODO(splits-in-tabs): replace .default appearance with CmuxBonsplitAppearance.workspaceTabBar (Task B3).
+        let outerConfig = BonsplitConfiguration(
+            allowSplits: false,
+            allowCloseTabs: true,
+            allowCloseLastPane: false,
+            allowTabReordering: true,
+            allowCrossPaneTabMove: false,
+            autoCloseEmptyPanes: false,
+            appearance: BonsplitConfiguration.Appearance.default
+        )
+        self.outerBonsplitController = BonsplitController(configuration: outerConfig)
+
+        // Remove the default "Welcome" tab that the outer Bonsplit creates automatically.
+        let outerWelcomeTabIds = outerBonsplitController.allTabIds
+
+        // Create the initial inner Bonsplit controller for the first workspace tab.
+        // TODO(splits-in-tabs): replace .default appearance with CmuxBonsplitAppearance.paneHeader (Task B3).
+        let initialInnerConfig = BonsplitConfiguration(
+            allowSplits: true,
+            allowCloseTabs: true,
+            allowCloseLastPane: false,
+            allowTabReordering: false,
+            allowCrossPaneTabMove: false,
+            autoCloseEmptyPanes: true,
+            contentViewLifecycle: .keepAllAlive,
+            newTabPosition: .current,
+            appearance: BonsplitConfiguration.Appearance.default
+        )
+        let initialInner = BonsplitController(configuration: initialInnerConfig)
+
+        // Seed the outer with one workspace tab and register the inner controller.
+        if let initialOuterTabId = outerBonsplitController.createTab(title: title, icon: nil) {
+            innerBonsplits[initialOuterTabId] = initialInner
+        }
+
+        // Remove the outer welcome tabs (must be done after inserting the real workspace tab
+        // so the outer controller has at least one tab and doesn't auto-close).
+        for outerWelcomeTabId in outerWelcomeTabIds {
+            outerBonsplitController.closeTab(outerWelcomeTabId)
+        }
+
+        // All surface-level operations go through the inner controller.
+        let innerController = initialInner
+        innerController.contextMenuShortcuts = Self.buildContextMenuShortcuts()
 
         // Remove the default "Welcome" tab that bonsplit creates
-        let welcomeTabIds = bonsplitController.allTabIds
+        let welcomeTabIds = innerController.allTabIds
 
         // When the workspace boots with an explicit initial command (`cmux ssh` /
         // `cmux vm new` both funnel their ssh startup script through this path),
@@ -7824,7 +7897,7 @@ final class Workspace: Identifiable, ObservableObject {
 
         var initialTabId: TabID?
         if let initialDetachedSurface {
-            if let initialPaneId = bonsplitController.allPaneIds.first,
+            if let initialPaneId = innerController.allPaneIds.first,
                attachDetachedSurface(initialDetachedSurface, inPane: initialPaneId, focus: false) != nil {
                 initialTabId = surfaceIdFromPanelId(initialDetachedSurface.panelId)
             }
@@ -7846,7 +7919,7 @@ final class Workspace: Identifiable, ObservableObject {
             seedTerminalInheritanceFontPoints(panelId: terminalPanel.id, configTemplate: configTemplate)
 
             // Create initial tab in bonsplit and store the mapping
-            if let tabId = bonsplitController.createTab(
+            if let tabId = innerController.createTab(
                 title: title,
                 icon: "terminal.fill",
                 kind: SurfaceKind.terminal,
@@ -7860,24 +7933,25 @@ final class Workspace: Identifiable, ObservableObject {
 
         // Close the default Welcome tab(s)
         for welcomeTabId in welcomeTabIds {
-            bonsplitController.closeTab(welcomeTabId)
+            innerController.closeTab(welcomeTabId)
         }
 
-        bonsplitController.onExternalTabDrop = { [weak self] request in
+        innerController.onExternalTabDrop = { [weak self] request in
             self?.handleExternalTabDrop(request) ?? false
         }
-        bonsplitController.onExternalFileDrop = { [weak self] request in
+        innerController.onExternalFileDrop = { [weak self] request in
             self?.handleExternalFileDrop(request) ?? false
         }
-        bonsplitController.tabContextMoveDestinationsProvider = { [weak self] tabId, _ in
+        innerController.tabContextMoveDestinationsProvider = { [weak self] tabId, _ in
             self?.bonsplitTabMoveDestinations(for: tabId) ?? []
         }
-        bonsplitController.onTabCloseRequest = { [weak self] tabId, _ in
+        innerController.onTabCloseRequest = { [weak self] tabId, _ in
             self?.markExplicitClose(surfaceId: tabId)
         }
 
-        // Set ourselves as delegate
-        bonsplitController.delegate = self
+        // Set ourselves as delegate for both outer and inner controllers
+        outerBonsplitController.delegate = self
+        innerController.delegate = self
 
         // Ensure bonsplit has a focused pane and our didSelectTab handler runs for the
         // initial terminal. bonsplit's createTab selects internally but does not emit
@@ -7885,19 +7959,19 @@ final class Workspace: Identifiable, ObservableObject {
         if let initialTabId, initialDetachedSurface == nil {
             // Focus the pane containing the initial tab (or the first pane as fallback).
             let paneToFocus: PaneID? = {
-                for paneId in bonsplitController.allPaneIds {
-                    if bonsplitController.tabs(inPane: paneId).contains(where: { $0.id == initialTabId }) {
+                for paneId in innerController.allPaneIds {
+                    if innerController.tabs(inPane: paneId).contains(where: { $0.id == initialTabId }) {
                         return paneId
                     }
                 }
-                return bonsplitController.allPaneIds.first
+                return innerController.allPaneIds.first
             }()
             if let paneToFocus {
-                bonsplitController.focusPane(paneToFocus)
+                innerController.focusPane(paneToFocus)
             }
-            bonsplitController.selectTab(initialTabId)
+            innerController.selectTab(initialTabId)
         }
-        tmuxLayoutSnapshot = bonsplitController.layoutSnapshot()
+        tmuxLayoutSnapshot = innerController.layoutSnapshot()
     }
 
     deinit {
@@ -13683,6 +13757,9 @@ extension Workspace: BonsplitDelegate {
     }
 
     func splitTabBar(_ controller: BonsplitController, shouldCloseTab tab: Bonsplit.Tab, inPane pane: PaneID) -> Bool {
+        // TODO(splits-in-tabs Phase C): Route outer shouldCloseTab to outer-tab teardown.
+        guard controller !== outerBonsplitController else { return true }
+
         func recordPostCloseSelection() {
             let tabs = controller.tabs(inPane: pane)
             guard let idx = tabs.firstIndex(where: { $0.id == tab.id }) else {
@@ -13928,6 +14005,8 @@ extension Workspace: BonsplitDelegate {
     }
 
     func splitTabBar(_ controller: BonsplitController, didSelectTab tab: Bonsplit.Tab, inPane pane: PaneID) {
+        // TODO(splits-in-tabs Phase C): Route outer didSelectTab to handleOuterDidSelectTab.
+        guard controller !== outerBonsplitController else { return }
         applyTabSelection(tabId: tab.id, inPane: pane)
     }
 
@@ -13986,6 +14065,8 @@ extension Workspace: BonsplitDelegate {
     }
 
     func splitTabBar(_ controller: BonsplitController, didFocusPane pane: PaneID) {
+        // TODO(splits-in-tabs Phase C): Route outer didFocusPane to outer-tab focus handler.
+        guard controller !== outerBonsplitController else { return }
         // When a pane is focused, focus its selected tab's panel
         guard let tab = controller.selectedTab(inPane: pane) else { return }
 #if DEBUG
@@ -14003,6 +14084,8 @@ extension Workspace: BonsplitDelegate {
     }
 
     func splitTabBar(_ controller: BonsplitController, didClosePane paneId: PaneID) {
+        // TODO(splits-in-tabs Phase C): Route outer didClosePane to outer-tab teardown.
+        guard controller !== outerBonsplitController else { return }
         let closedPanelIds = pendingPaneClosePanelIds.removeValue(forKey: paneId.id) ?? []
         let shouldScheduleFocusReconcile = !isDetachingCloseTransaction
 
@@ -14060,6 +14143,9 @@ extension Workspace: BonsplitDelegate {
     }
 
     func splitTabBar(_ controller: BonsplitController, didSplitPane originalPane: PaneID, newPane: PaneID, orientation: SplitOrientation) {
+        // The outer controller has splits disabled; this callback should never fire for it.
+        // Guard defensively for Phase B until Phase C wires full routing.
+        guard controller !== outerBonsplitController else { return }
 #if DEBUG
         let panelKindForTab: (TabID) -> String = { tabId in
             guard let panelId = self.panelIdFromSurfaceId(tabId),
@@ -14356,6 +14442,8 @@ extension Workspace: BonsplitDelegate {
     }
 
     func splitTabBar(_ controller: BonsplitController, didRequestNewTab kind: String, inPane pane: PaneID) {
+        // TODO(splits-in-tabs Phase C): Route outer didRequestNewTab to create a new workspace tab.
+        guard controller !== outerBonsplitController else { return }
         switch kind {
         case "terminal":
             _ = newTerminalSurface(inPane: pane)
@@ -14437,6 +14525,8 @@ extension Workspace: BonsplitDelegate {
     }
 
     func splitTabBar(_ controller: BonsplitController, didChangeGeometry snapshot: LayoutSnapshot) {
+        // TODO(splits-in-tabs Phase C): Route outer geometry changes separately.
+        guard controller !== outerBonsplitController else { return }
         tmuxLayoutSnapshot = snapshot
         scheduleTerminalGeometryReconcile()
         if !isDetachingCloseTransaction {
