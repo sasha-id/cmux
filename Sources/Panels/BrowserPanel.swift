@@ -3537,6 +3537,12 @@ final class BrowserPanel: Panel, ObservableObject {
         }
     }
 
+    /// Ask AppKit to make the browser's WKWebView the first responder so the
+    /// browser receives keyboard input immediately after a workspace-tab switch.
+    func requestAppKitFirstResponder() {
+        focus()
+    }
+
     func close() {
         GlobalSearchCoordinator.shared.purgePanel(id: id)
         closeDeveloperToolsForTeardown()

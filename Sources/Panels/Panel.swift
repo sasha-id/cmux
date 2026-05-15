@@ -303,6 +303,11 @@ public protocol Panel: AnyObject, Identifiable, ObservableObject where ID == UUI
     /// Explicitly yield a previously owned focus target before another panel restores focus.
     @discardableResult
     func yieldFocusIntent(_ intent: PanelFocusIntent, in window: NSWindow) -> Bool
+
+    /// Ask AppKit to make this panel's primary NSView the first responder.
+    /// Called by `handleOuterDidSelectTab` to ensure keystrokes reach the terminal
+    /// surface immediately after a workspace-tab switch without requiring a click.
+    func requestAppKitFirstResponder()
 }
 
 /// Extension providing default implementations
@@ -345,5 +350,9 @@ extension Panel {
 
     func triggerFlash() {
         triggerFlash(reason: .navigation)
+    }
+
+    func requestAppKitFirstResponder() {
+        // Default: no-op. Panel types that own a focusable NSView override this.
     }
 }

@@ -73,10 +73,8 @@ extension Workspace {
         innerBonsplits.removeValue(forKey: tabId)
     }
 
-    // MARK: - Outer: didSelectTab (stub — Task H1 completes the body)
+    // MARK: - Outer: didSelectTab
 
-    // IMPORTANT: this body is intentionally a stub for Task H1's red/green regression.
-    // Task H1 will implement inner pane focus + AppKit first-responder restoration.
     func handleOuterDidSelectTab(_ tab: Bonsplit.Tab) {
         // Track the previous outer tab for wstab.last (Phase F).
         // `didSelectTab` fires after the controller updated its selection, so `currentOuterTabId`
@@ -85,7 +83,25 @@ extension Workspace {
         // and `from != nil`, so calling it with the last stored value is safe on re-entry.
         recordOuterTabFocusChange(from: _trackedOuterTabIdBeforeSelect, to: tab.id)
         _trackedOuterTabIdBeforeSelect = tab.id
-        // TODO(H1): restore inner pane focus + AppKit first-responder. Wired in Task H1.
+
+        // Restore the inner pane that was last focused within this workspace tab.
+        // Without this, Bonsplit selects the outer tab but the inner pane focus and
+        // AppKit first-responder stay on the previously-active tab's surface —
+        // keystrokes would silently flow to the wrong terminal. (Closes #3297.)
+        guard let inner = innerBonsplits[tab.id] else { return }
+
+        let paneToFocus = inner.focusedPaneId ?? inner.allPaneIds.first
+        if let pane = paneToFocus {
+            inner.focusPane(pane)
+
+            // Hand AppKit first-responder to the surface view of the selected tab in that pane.
+            if let selected = inner.selectedTab(inPane: pane),
+               let panelId = panelIdFromSurfaceId(selected.id),
+               let panel = panels[panelId] {
+                panel.requestAppKitFirstResponder()
+            }
+        }
+
     }
 
     // MARK: - Factory helpers

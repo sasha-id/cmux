@@ -199,6 +199,16 @@ final class TerminalPanel: Panel, ObservableObject {
         viewReattachToken &+= 1
     }
 
+    /// Ask AppKit to make the terminal surface's NSView the first responder so
+    /// keystrokes reach the terminal immediately after a workspace-tab switch.
+    ///
+    /// This delegates to `ensureFocus`, which is the existing, retry-safe path
+    /// for asserting first-responder on the terminal's scroll/surface view.
+    func requestAppKitFirstResponder() {
+        hostedView.setActive(true)
+        hostedView.ensureFocus(for: workspaceId, surfaceId: id)
+    }
+
     // MARK: - Terminal-specific methods
 
     func sendText(_ text: String) {
