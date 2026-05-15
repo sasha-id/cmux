@@ -101,11 +101,38 @@ export const shortcutCategories: ShortcutCategory[] = [
     ],
   },
   {
+    id: "workspace-tabs",
+    titleKey: "workspaceTabs",
+    blurbKey: "workspaceTabsBlurb",
+    shortcuts: [
+      {
+        id: "newWorkspaceTab",
+        combos: [["⌘", "T"]],
+        description: { en: "New workspace tab", ja: "新規ワークスペースタブ" },
+        note: { en: "creates a tab with a new terminal in the current workspace", ja: "現在のワークスペースに新しいターミナルのタブを作成" },
+      },
+      { id: "nextWorkspaceTab", combos: [["⌃", "⇥"]], description: { en: "Next workspace tab", ja: "次のワークスペースタブ" } },
+      { id: "prevWorkspaceTab", combos: [["⌃", "⇧", "⇥"]], description: { en: "Previous workspace tab", ja: "前のワークスペースタブ" } },
+      { id: "selectWorkspaceTabByNumber", combos: [["⌘", "1…9"]], description: { en: "Select workspace tab 1…9", ja: "ワークスペースタブ1…9を選択" } },
+      {
+        id: "closeWorkspaceTab",
+        combos: [["⌘", "W"]],
+        description: { en: "Close workspace tab", ja: "ワークスペースタブを閉じる" },
+        note: { en: "closes the focused tab; last tab follows LastSurfaceCloseShortcutSettings", ja: "フォーカス中のタブを閉じる。最後のタブの動作はLastSurfaceCloseShortcutSettingsに従います" },
+      },
+    ],
+  },
+  {
     id: "surfaces",
     titleKey: "surfaces",
     blurbKey: "surfacesBlurb",
     shortcuts: [
-      { id: "newSurface", combos: [["⌘", "T"]], description: { en: "New surface", ja: "新規サーフェス" } },
+      {
+        id: "newSurface",
+        combos: [],
+        description: { en: "New surface", ja: "新規サーフェス" },
+        note: { en: "unbound by default (was Cmd+T before workspace tabs)", ja: "デフォルトでは未割り当て（ワークスペースタブ導入前はCmd+T）" },
+      },
       { id: "nextSurface", combos: [["⌘", "⇧", "]"]], description: { en: "Next surface", ja: "次のサーフェス" } },
       { id: "prevSurface", combos: [["⌘", "⇧", "["]], description: { en: "Previous surface", ja: "前のサーフェス" } },
       { id: "selectSurfaceByNumber", combos: [["⌃", "1…9"]], description: { en: "Select surface 1…9", ja: "サーフェス1…9を選択" } },

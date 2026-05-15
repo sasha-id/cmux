@@ -132,6 +132,13 @@ Environment:
 | `open-notification` | Focus the notification's workspace/surface and mark it read. |
 | `jump-to-unread` | Focus the latest unread notification. |
 | `clear-notifications` | Clear queued notifications. |
+| `wstab-list` | List workspace tabs for a workspace. Alias for `wstab.list` socket verb. |
+| `wstab-create` | Create a new workspace tab. Alias for `wstab.create` socket verb. |
+| `wstab-close` | Close a workspace tab by `wstab_id`. Alias for `wstab.close` socket verb. |
+| `wstab-focus` | Focus a workspace tab by `wstab_id`. Alias for `wstab.focus` socket verb. |
+| `wstab-reorder` | Move a workspace tab before or after an anchor tab. Alias for `wstab.reorder` socket verb. |
+| `wstab-last` | Focus the most recently focused workspace tab. Alias for `wstab.last` socket verb. |
+| `wstab-move-to-workspace` | Move a workspace tab into another workspace. Alias for `wstab.move_to_workspace` socket verb. |
 | `right-sidebar` | Control right sidebar visibility, mode, focus, and state reads. |
 | `set-status` | Set a sidebar status pill. |
 | `clear-status` | Remove a sidebar status pill. |
@@ -194,6 +201,29 @@ Theme subcommands:
 | `themes set --light <theme>` | Set the light appearance theme. |
 | `themes set --dark <theme>` | Set the dark appearance theme. |
 | `themes clear` | Remove the cmux theme override. |
+
+Workspace tab (wstab) socket verbs:
+
+Each workspace owns an outer tab strip of workspace tabs. `surface.*` and
+`pane.*` verbs scope to the focused workspace tab. `wstab.*` verbs target the
+outer strip directly.
+
+| Verb | Params | Returns | Notes |
+| --- | --- | --- | --- |
+| `wstab.list` | `workspace_id` | `{ wstabs: [{id, title, surface_ids, focused, pane_count}] }` | Lists workspace tabs in order. `focused` marks the active tab. `pane_count` reflects the split layout depth. |
+| `wstab.create` | `workspace_id`, `title?`, `cwd?` | `{ id, workspace_id }` | Creates a new workspace tab with a default terminal surface. `title` defaults to the inherited cwd. |
+| `wstab.close` | `wstab_id` | `{ ok: true }` | Closes the workspace tab and all its surfaces. Applies `LastSurfaceCloseShortcutSettings` when closing the last tab. |
+| `wstab.focus` | `wstab_id` | `{ ok: true }` | Selects the workspace tab and restores inner pane focus + AppKit first-responder. Does not steal app focus. |
+| `wstab.reorder` | `wstab_id`, `before?`, `after?` | `{ ok: true }` | Moves the workspace tab before or after the anchor tab ID. |
+| `wstab.last` | `workspace_id` | `{ wstab_id, previous_wstab_id }` | Returns the most recently focused workspace tab. Useful for back/forward navigation. |
+| `wstab.move_to_workspace` | `wstab_id`, `dest_workspace_id` | `{ wstab_id, workspace_id }` | Moves a workspace tab (with its full split tree and surfaces) into another workspace. |
+| `wstab.promote_surface_drop` | `surface_id`, `workspace_id`, `wstab_id?`, `position?` | `{ wstab_id, workspace_id }` | Internal: promotes a dragged surface into a new or existing workspace tab via drag-and-drop. |
+
+`identify` returns `wstab_id` under `focused.wstab_id` for the currently focused workspace tab.
+
+`surface.is_first_responder` returns `{ is_first_responder: Bool, surface_id, surface_ref }` for the
+focused surface's AppKit first-responder status. Useful for debugging focus stealing and in tests
+that verify focus is properly restored after workspace-tab switches.
 
 Workspace and tab action names:
 

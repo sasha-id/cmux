@@ -2,6 +2,32 @@
 
 All notable changes to cmux are documented here.
 
+## [Unreleased]
+
+### Breaking
+
+- **Workspace hierarchy inverted to iTerm2-style.** Workspaces now have top-level tabs;
+  each tab owns its own split layout. Existing multi-tab-per-pane workspaces are migrated
+  on first launch: each existing tab becomes a workspace-level tab. The selected tab of
+  each pane retains its split-context; non-selected tabs become single-pane workspace
+  tabs at the right of the workspace tab bar. Closes #3297 (also addresses #569, #1362,
+  #2084, #2277).
+- **Cmd+T** now creates a new workspace tab (previously: new surface in current pane).
+  Additional defaults: **Ctrl+Tab** / **Ctrl+Shift+Tab** cycle workspace tabs, **Cmd+1..9**
+  selects the Nth workspace tab. The old `newSurface` action is unchanged and remains
+  available with no default keybinding for users who rebind it.
+- New socket verbs: `wstab.create`, `wstab.close`, `wstab.focus`, `wstab.list`,
+  `wstab.reorder`, `wstab.last`, `wstab.move_to_workspace`.
+- New diagnostic verb: `surface.is_first_responder` — returns whether the focused
+  terminal surface is the current AppKit first responder. Useful for debugging focus
+  stealing and automated tests.
+- `surface.create` with a `pane` argument now auto-splits the target pane if it already
+  has a surface (single-surface-per-pane invariant). Without a `pane`, it creates a new
+  workspace tab.
+- **Outer tabs with split layouts show an affordance icon** (small split glyph) so users
+  can tell at a glance which workspace tabs contain a split vs. a single surface (#2277).
+- `identify` returns `wstab_id` under `focused` for the currently focused workspace tab.
+
 ## [0.64.6] - 2026-05-14
 
 ### Added

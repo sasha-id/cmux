@@ -12,7 +12,7 @@ from the same connection.
 
 ```bash
 cmux events --cursor-file ~/.cache/cmux/events.seq --reconnect
-cmux events --category window --category workspace --category pane --category surface
+cmux events --category window --category workspace --category wstab --category pane --category surface
 cmux events --category notification
 cmux events --category feed --category agent --no-heartbeat
 ```
@@ -234,6 +234,16 @@ Workspace:
 | `workspace.reordered` | Workspace order changed. |
 | `workspace.moved` | Workspace moved to another window. |
 | `workspace.action` | Workspace action command completed. |
+
+Workspace tabs (wstab):
+
+| Name | Trigger |
+| --- | --- |
+| `wstab.created` | A workspace tab was created via `wstab.create`, Cmd+T, command palette, or CLI. Payload: `wstab_id`, `workspace_id`, `title`, `origin`. |
+| `wstab.closed` | A workspace tab was closed via `wstab.close`, Cmd+W (last pane), or workspace close. Payload: `wstab_id`, `workspace_id`, `origin`. |
+| `wstab.focused` | The selected workspace tab changed via `wstab.focus`, Ctrl+Tab, Cmd+1–9, or click. Payload: `wstab_id`, `workspace_id`, `previous_wstab_id`, `surface_id`, `origin`. |
+| `wstab.reordered` | A workspace tab was moved within the tab bar via `wstab.reorder` or drag. Payload: `wstab_id`, `workspace_id`, `origin`. |
+| `wstab.moved_to_workspace` | A workspace tab was moved to another workspace via `wstab.move_to_workspace` or drag-promote. Payload: `wstab_id`, `source_workspace_id`, `dest_workspace_id`, `origin`. |
 
 Surface and pane:
 

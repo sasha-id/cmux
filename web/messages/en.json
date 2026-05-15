@@ -545,6 +545,8 @@
         "appBlurb": "Application, window, and top-level command shortcuts.",
         "workspaces": "Workspaces",
         "workspacesBlurb": "Workspaces live in the sidebar. Each workspace has its own set of panes and surfaces.",
+        "workspaceTabs": "Workspace Tabs",
+        "workspaceTabsBlurb": "Each workspace has a top-level tab bar. Cmd+T creates a new tab; each tab owns its own split layout.",
         "surfaces": "Surfaces",
         "surfacesBlurb": "Surfaces are tabs inside a pane.",
         "splitPanes": "Split Panes",
