@@ -105,8 +105,8 @@ enum SessionSnapshotDebugBenchmark {
                 logEntries += workspace.logEntries.count
                 if workspace.progress != nil { progressEntries += 1 }
                 if workspace.gitBranch != nil { gitEntries += 1 }
-                panels += workspace.panels.count
-                for panel in workspace.panels {
+                panels += workspace.panels?.count ?? 0
+                for panel in workspace.panels ?? [] {
                     if let terminal = panel.terminal {
                         terminals += 1
                         scrollbackChars += terminal.scrollback?.count ?? 0

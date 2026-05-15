@@ -265,21 +265,25 @@ extension Workspace {
             currentDirectory = normalizedCurrentDirectory
         }
 
-        let panelSnapshotsById = Dictionary(uniqueKeysWithValues: snapshot.panels.map { ($0.id, $0) })
-        let leafEntries = restoreSessionLayout(snapshot.layout)
+        let legacyPanels = snapshot.panels ?? []
+        let panelSnapshotsById = Dictionary(uniqueKeysWithValues: legacyPanels.map { ($0.id, $0) })
         var oldToNewPanelIds: [UUID: UUID] = [:]
 
-        for entry in leafEntries {
-            restorePane(
-                entry.paneId,
-                snapshot: entry.snapshot,
-                panelSnapshotsById: panelSnapshotsById,
-                oldToNewPanelIds: &oldToNewPanelIds
-            )
+        if let legacyLayout = snapshot.layout {
+            let leafEntries = restoreSessionLayout(legacyLayout)
+            for entry in leafEntries {
+                restorePane(
+                    entry.paneId,
+                    snapshot: entry.snapshot,
+                    panelSnapshotsById: panelSnapshotsById,
+                    oldToNewPanelIds: &oldToNewPanelIds
+                )
+            }
+            pruneSurfaceMetadata(validSurfaceIds: Set(panels.keys))
+            applySessionDividerPositions(snapshotNode: legacyLayout, liveNode: bonsplitController.treeSnapshot())
+        } else {
+            pruneSurfaceMetadata(validSurfaceIds: Set(panels.keys))
         }
-
-        pruneSurfaceMetadata(validSurfaceIds: Set(panels.keys))
-        applySessionDividerPositions(snapshotNode: snapshot.layout, liveNode: bonsplitController.treeSnapshot())
 
         applyProcessTitle(snapshot.processTitle)
         setCustomTitle(snapshot.customTitle)

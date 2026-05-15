@@ -349,8 +349,13 @@ struct SessionWorkspaceSnapshot: Codable, Sendable {
     var terminalScrollBarHidden: Bool?
     var currentDirectory: String
     var focusedPanelId: UUID?
-    var layout: SessionWorkspaceLayoutSnapshot
-    var panels: [SessionPanelSnapshot]
+    /// Legacy single-tab layout. Present in saves written by builds before workspace tabs.
+    /// When `tabs` is non-nil, this field is ignored on load and not written on save.
+    var layout: SessionWorkspaceLayoutSnapshot?
+    /// Legacy single-tab panels. Same semantics as `layout`.
+    var panels: [SessionPanelSnapshot]?
+    /// New shape: one entry per workspace tab.
+    var tabs: [SessionWorkspaceTabSnapshot]?
     var statusEntries: [SessionStatusEntrySnapshot]
     var logEntries: [SessionLogEntrySnapshot]
     var progress: SessionProgressSnapshot?
